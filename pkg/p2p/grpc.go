@@ -39,6 +39,7 @@ func (n p2pNetwork) Connect(stream network.Network_ConnectServer) error {
 		id:     model.GetPeerID(peerCtx.Addr.String()),
 		nodeId: nodeId,
 		gate:   stream,
+		addr:   peerCtx.Addr.String(),
 	}
 	n.addPeer(peer)
 	return n.receiveFromPeer(peer, stream)
@@ -71,7 +72,7 @@ func (n p2pNetwork) receiveFromPeer(peer *peer, gate messageGate) error {
 			}
 			break
 		}
-		log.Log().Infof("Received message from peer: %s", msg.String())
+		log.Log().Debugf("Received message from peer (%s): %s", peer, msg.String())
 		if msg.Header == nil {
 			err = ErrMissingProtocolVersion
 			break
@@ -80,7 +81,7 @@ func (n p2pNetwork) receiveFromPeer(peer *peer, gate messageGate) error {
 			break
 		}
 		if msg.AdvertLastHash != nil {
-			log.Log().Info("Received last hash from peer: " + hex.EncodeToString(msg.AdvertLastHash.Hash))
+			log.Log().Infof("Received last hash from peer (%s): %s", peer, hex.EncodeToString(msg.AdvertLastHash.Hash))
 		}
 	}
 	if err != nil {

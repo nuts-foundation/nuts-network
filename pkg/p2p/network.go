@@ -35,10 +35,11 @@ type peer struct {
 	gate   messageGate
 	// conn is only filled for peers where we're the connecting party
 	conn *grpc.ClientConn
+	addr string
 }
 
 func (p peer) String() string {
-	return fmt.Sprintf("%s(%s)", p.nodeId, p.conn.Target())
+	return fmt.Sprintf("%s(%s)", p.nodeId, p.addr)
 }
 
 func NewP2PNetwork() P2PNetwork {
@@ -120,7 +121,7 @@ func (n p2pNetwork) AdvertHash(hash []byte) {
 func (n *p2pNetwork) connectToRemoteNodes() {
 	go func() {
 		for nodeInfo := range n.remoteNodeAddChannel {
-			if n.remoteNodes[nodeInfo.ID] != nil {
+			if n.remoteNodes[nodeInfo.ID] == nil {
 				n.remoteNodes[nodeInfo.ID] = &nodeInfo
 				log.Log().Infof("Added remote node: %s", nodeInfo)
 			}
@@ -129,15 +130,12 @@ func (n *p2pNetwork) connectToRemoteNodes() {
 
 	// TODO: We should probably do this per node
 	// TODO: We need a backoff strategy
-	timer1 := time.NewTimer(1 * time.Second)
+	ticker := time.NewTicker(1 * time.Second)
 	for {
 		// TODO: Exit strategy
-		<-timer1.C
-		log.Log().Info("timer tick")
+		<-ticker.C
 		for _, nodeInfo := range n.remoteNodes {
-			log.Log().Infof("1: %v", nodeInfo)
 			if !n.isConnectedTo(*nodeInfo) {
-				log.Log().Info("not connected to node, connecting: " + nodeInfo.String())
 				if err := n.connectToNode(nodeInfo); err != nil {
 					log.Log().Warnf("Couldn't connect to node: %s", nodeInfo, err)
 				}
@@ -178,11 +176,14 @@ func (n *p2pNetwork) connectToNode(nodeInfo *model.NodeInfo) error {
 	}
 	peer := &peer{
 		id:     model.GetPeerID(nodeInfo.Address),
+		nodeId: nodeInfo.ID,
 		conn:   conn,
 		client: client,
 		gate:   gate,
+		addr:   nodeInfo.Address,
 	}
 	n.addPeer(peer)
+	// TODO: Check NodeID sent by peer
 	go func() {
 		// We can safely ignore the error since all handling (cleaning up after an error) is done by receiveFromPeer
 		_ = n.receiveFromPeer(peer, gate)

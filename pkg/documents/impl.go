@@ -15,7 +15,7 @@ func NewDocumentLog(p2pNetwork p2p.P2PNetwork) DocumentLog {
 type documentLog struct {
 	p2pNetwork          p2p.P2PNetwork
 	lastHash            []byte
-	advertLastHashTimer *time.Timer
+	advertLastHashTimer *time.Ticker
 }
 
 func (dl *documentLog) Stop() {
@@ -26,13 +26,14 @@ func (dl *documentLog) Stop() {
 func (dl *documentLog) Start() {
 	// TODO
 	dl.lastHash = []byte("foobar")
-	dl.advertLastHashTimer = time.NewTimer(AdvertLastHashInterval)
+	dl.advertLastHashTimer = time.NewTicker(AdvertLastHashInterval)
+	go dl.advertLastHash()
 }
 
 func (dl documentLog) advertLastHash() {
 	for {
 		<-dl.advertLastHashTimer.C
-		log.Log().Info("Adverting last ash")
+		log.Log().Debug("Adverting last hash")
 		dl.p2pNetwork.AdvertHash(dl.lastHash)
 	}
 }
