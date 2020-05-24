@@ -20,8 +20,12 @@
 package pkg
 
 import (
+	"errors"
+	core "github.com/nuts-foundation/nuts-go-core"
+	"github.com/nuts-foundation/nuts-network/pkg/documents"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/pkg/p2p"
+	"github.com/spf13/cobra"
 	"strings"
 	"sync"
 )
@@ -52,9 +56,10 @@ func (c NetworkConfig) ParseBootstrapNodes() []string {
 
 // Network holds the config and Db reference
 type Network struct {
-	Config     NetworkConfig
-	configOnce sync.Once
-	p2pNetwork p2p.P2PNetwork
+	Config      NetworkConfig
+	configOnce  sync.Once
+	p2pNetwork  p2p.P2PNetwork
+	documentLog documents.DocumentLog
 }
 
 var instance *Network
@@ -63,8 +68,10 @@ var oneRegistry sync.Once
 // NetworkInstance returns the singleton Network
 func NetworkInstance() *Network {
 	oneRegistry.Do(func() {
+		p2pNetwork := p2p.NewP2PNetwork()
 		instance = &Network{
-			p2pNetwork: p2p.NewP2PNetwork(),
+			p2pNetwork:  p2pNetwork,
+			documentLog: documents.NewDocumentLog(p2pNetwork),
 		}
 	})
 
@@ -76,6 +83,12 @@ func (n *Network) Configure() error {
 	var err error
 
 	n.configOnce.Do(func() {
+		// TODO: Why isn't this in core?
+		core.NutsConfig().Load(&cobra.Command{})
+		if core.NutsConfig().Identity() == "" {
+			err = errors.New("nuts identity not configured")
+			return
+		}
 		for _, nodeInfo := range n.Config.ParseBootstrapNodes() {
 			n.p2pNetwork.AddRemoteNode(model.ParseNodeInfo(nodeInfo))
 		}
@@ -85,11 +98,19 @@ func (n *Network) Configure() error {
 
 // Start initiates the network subsystem
 func (n *Network) Start() error {
-	networkConfig := p2p.P2PNetworkConfig{ListenAddress: n.Config.GrpcAddr}
-	return n.p2pNetwork.Start(networkConfig)
+	networkConfig := p2p.P2PNetworkConfig{
+		NodeID:        model.NodeID(core.NutsConfig().Identity()), // TODO: Is this right?
+		ListenAddress: n.Config.GrpcAddr,
+	}
+	if err := n.p2pNetwork.Start(networkConfig); err != nil {
+		return err
+	}
+	n.documentLog.Start()
+	return nil
 }
 
 // Shutdown cleans up any leftover go routines
 func (n *Network) Shutdown() error {
+	n.documentLog.Stop()
 	return n.p2pNetwork.Stop()
 }

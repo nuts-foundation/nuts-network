@@ -45,7 +45,7 @@ func NewNetworkEngine() *core.Engine {
 func flagSet() *pflag.FlagSet {
 	flagSet := pflag.NewFlagSet("network", pflag.ContinueOnError)
 	flagSet.String("grpcAddr", ":5555", "gRPC address to listen on")
-	flagSet.String("bootstrapNodes", "localhost:5555", "Space-separated list of bootstrap node addresses")
+	flagSet.String("bootstrapNodes", "", "Space-separated list of bootstrap node addresses")
 	return flagSet
 }
 

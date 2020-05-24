@@ -4,6 +4,12 @@ import "fmt"
 
 type NodeID string
 
+type PeerID string
+
+func GetPeerID(addr string) PeerID {
+	return PeerID(addr)
+}
+
 type NodeInfo struct {
 	ID      NodeID
 	Address string
