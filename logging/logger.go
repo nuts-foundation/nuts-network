@@ -20,11 +20,10 @@
 package log
 
 import (
-	"github.com/nuts-foundation/nuts-network/pkg"
 	"github.com/sirupsen/logrus"
 )
 
-var _logger = logrus.StandardLogger().WithField("module", pkg.ModuleName)
+var _logger = logrus.StandardLogger().WithField("module", "Network")
 
 func Log() *logrus.Entry {
 	return _logger

@@ -20,6 +20,9 @@
 package pkg
 
 import (
+	"github.com/nuts-foundation/nuts-network/pkg/model"
+	"github.com/nuts-foundation/nuts-network/pkg/p2p"
+	"strings"
 	"sync"
 )
 
@@ -28,17 +31,30 @@ const ModuleName = "Network"
 
 // NetworkClient is the interface to be implemented by any remote or local client
 type NetworkClient interface {
-
 }
 
 // NetworkConfig holds the config
 type NetworkConfig struct {
+	GrpcAddr       string
+	BootstrapNodes string
+}
+
+func (c NetworkConfig) ParseBootstrapNodes() []string {
+	var result []string
+	for _, addr := range strings.Split(c.BootstrapNodes, " ") {
+		trimmedAddr := strings.TrimSpace(addr)
+		if trimmedAddr != "" {
+			result = append(result, trimmedAddr)
+		}
+	}
+	return result
 }
 
 // Network holds the config and Db reference
 type Network struct {
-	Config      NetworkConfig
-	configOnce  sync.Once
+	Config     NetworkConfig
+	configOnce sync.Once
+	p2pNetwork p2p.P2PNetwork
 }
 
 var instance *Network
@@ -48,6 +64,7 @@ var oneRegistry sync.Once
 func NetworkInstance() *Network {
 	oneRegistry.Do(func() {
 		instance = &Network{
+			p2pNetwork: p2p.NewP2PNetwork(),
 		}
 	})
 
@@ -55,21 +72,24 @@ func NetworkInstance() *Network {
 }
 
 // Configure initializes the db, but only when in server mode
-func (r *Network) Configure() error {
+func (n *Network) Configure() error {
 	var err error
 
-	r.configOnce.Do(func() {
-		// TODO
+	n.configOnce.Do(func() {
+		for _, nodeInfo := range n.Config.ParseBootstrapNodes() {
+			n.p2pNetwork.AddRemoteNode(model.ParseNodeInfo(nodeInfo))
+		}
 	})
 	return err
 }
 
 // Start initiates the network subsystem
-func (r *Network) Start() error {
-	return nil
+func (n *Network) Start() error {
+	networkConfig := p2p.P2PNetworkConfig{ListenAddress: n.Config.GrpcAddr}
+	return n.p2pNetwork.Start(networkConfig)
 }
 
 // Shutdown cleans up any leftover go routines
-func (r *Network) Shutdown() error {
-	return nil
+func (n *Network) Shutdown() error {
+	return n.p2pNetwork.Stop()
 }

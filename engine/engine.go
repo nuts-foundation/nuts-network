@@ -44,6 +44,8 @@ func NewNetworkEngine() *core.Engine {
 
 func flagSet() *pflag.FlagSet {
 	flagSet := pflag.NewFlagSet("network", pflag.ContinueOnError)
+	flagSet.String("grpcAddr", ":5555", "gRPC address to listen on")
+	flagSet.String("bootstrapNodes", "localhost:5555", "Space-separated list of bootstrap node addresses")
 	return flagSet
 }
 
@@ -57,7 +59,7 @@ func cmd() *cobra.Command {
 		Use:   "version",
 		Short: "Print the version number of the Nuts network",
 		Run: func(cmd *cobra.Command, args []string) {
-			logging.Log().Errorf("version 0.0.0")
+			logging.Log().Info("version 0.0.0")
 		},
 	})
 
@@ -66,6 +68,8 @@ func cmd() *cobra.Command {
 		Short: "Run standalone api server",
 		Run: func(cmd *cobra.Command, args []string) {
 			// TODO
+			c := make(chan bool, 1)
+			<-c
 		},
 	})
 	return cmd

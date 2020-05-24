@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+option go_package = "github.com/nuts-foundation/nuts-network/network";
+
+package network;
+
+service Network {
+  rpc Connect (stream NetworkMessage) returns (stream NetworkMessage) {}
+}
+
+// We multiplex all of our messages over a single super-message type, because we're using streams. If we did not do that,
+// we'd need to open a stream per operation, which would make the number of required streams explode (since we're
+// building a full mesh network).
+message NetworkMessage {
+  Header header = 1;
+  AdvertLastHash advertLastHash = 100;
+}
+
+// Metadata types
+message Header {
+  uint32 version = 1;
+}
+
+// Actual messages go here
+message AdvertLastHash {
+  bytes hash = 1;
+}
