@@ -22,8 +22,9 @@ package pkg
 import (
 	"errors"
 	core "github.com/nuts-foundation/nuts-go-core"
-	"github.com/nuts-foundation/nuts-network/pkg/documents"
+	"github.com/nuts-foundation/nuts-network/pkg/doclog"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
+	"github.com/nuts-foundation/nuts-network/pkg/nodelist"
 	"github.com/nuts-foundation/nuts-network/pkg/p2p"
 	"github.com/spf13/cobra"
 	"strings"
@@ -59,7 +60,8 @@ type Network struct {
 	Config      NetworkConfig
 	configOnce  sync.Once
 	p2pNetwork  p2p.P2PNetwork
-	documentLog documents.DocumentLog
+	documentLog doclog.DocumentLog
+	nodeList    nodelist.NodeList
 }
 
 var instance *Network
@@ -69,9 +71,11 @@ var oneRegistry sync.Once
 func NetworkInstance() *Network {
 	oneRegistry.Do(func() {
 		p2pNetwork := p2p.NewP2PNetwork()
+		documentLog := doclog.NewDocumentLog(p2pNetwork)
 		instance = &Network{
 			p2pNetwork:  p2pNetwork,
-			documentLog: documents.NewDocumentLog(p2pNetwork),
+			documentLog: documentLog,
+			nodeList:    nodelist.NewNodeList(documentLog),
 		}
 	})
 
@@ -106,11 +110,13 @@ func (n *Network) Start() error {
 		return err
 	}
 	n.documentLog.Start()
+	n.nodeList.Start(networkConfig.NodeID, "127.0.0.1" + networkConfig.ListenAddress) // TODO: Make configurable
 	return nil
 }
 
 // Shutdown cleans up any leftover go routines
 func (n *Network) Shutdown() error {
+	n.nodeList.Stop()
 	n.documentLog.Stop()
 	return n.p2pNetwork.Stop()
 }

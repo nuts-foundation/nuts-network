@@ -14,7 +14,9 @@ service Network {
 // building a full mesh network).
 message NetworkMessage {
     Header header = 1;
-    AdvertLastHash advertLastHash = 100;
+    AdvertHash advertHash = 100;
+    HashListQuery hashListQuery = 101;
+    HashList hashList = 102;
 }
 
 // Metadata types
@@ -23,6 +25,15 @@ message Header {
 }
 
 // Actual messages go here
-message AdvertLastHash {
+message AdvertHash {
     bytes hash = 1;
+}
+
+// Message to ask for a peer's hash list
+message HashListQuery {
+}
+
+// Message to inform a peer of our hash list
+message HashList {
+    repeated bytes hash = 1;
 }

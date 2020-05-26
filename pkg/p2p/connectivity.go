@@ -1,7 +1,6 @@
 package p2p
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
 	log "github.com/nuts-foundation/nuts-network/logging"
@@ -10,7 +9,6 @@ import (
 	errors2 "github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
 	grpcPeer "google.golang.org/grpc/peer"
-	"io"
 	"strings"
 )
 
@@ -59,35 +57,10 @@ func constructMetadata(nodeId model.NodeID) metadata.MD {
 	return metadata.New(map[string]string{NodeIDHeader: string(nodeId)})
 }
 
-// receiveFromPeer reads messages from the peer until it disconnects or the network is stopped.
-func (n p2pNetwork) receiveFromPeer(peer *peer, gate messageGate) error {
-	var err error
-	for n.isRunning() {
-		msg, recvErr := gate.Recv()
-		if recvErr != nil {
-			if err == io.EOF {
-				log.Log().Infof("Peer closed connection: %s", peer)
-			} else {
-				log.Log().Errorf("Peer connection error: %s", peer, recvErr)
-			}
-			break
-		}
-		log.Log().Debugf("Received message from peer (%s): %s", peer, msg.String())
-		if msg.Header == nil {
-			err = ErrMissingProtocolVersion
-			break
-		} else if msg.Header.Version != ProtocolVersion {
-			err = ErrUnsupportedProtocolVersion
-			break
-		}
-		if msg.AdvertLastHash != nil {
-			log.Log().Infof("Received last hash from peer (%s): %s", peer, hex.EncodeToString(msg.AdvertLastHash.Hash))
-		}
-	}
-	if err != nil {
-		log.Log().Errorf("Protocol error occurred, closing connection: %s", peer, err)
-	}
-	// TODO: Synchronization
-	n.removePeer(peer)
-	return err
+func (n *p2pNetwork) addPeer(peer *peer) {
+	n.peers[peer.id] = peer
+}
+
+func (n *p2pNetwork) removePeer(peer *peer) {
+	delete(n.peers, peer.id)
 }

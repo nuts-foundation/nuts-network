@@ -14,6 +14,9 @@ import (
 
 type p2pNetwork struct {
 	node model.NodeInfo
+	// TODO: What if no-one is actually listening to this queue? Maybe we should create it when someone asks for it (lazy initialization)?
+	receivedConsistencyHashes *AdvertedHashQueue
+	receivedDocumentHashes    *AdvertedHashQueue
 	/* gRPC server */
 	grpcServer *grpc.Server
 	listener   net.Listener
@@ -22,9 +25,36 @@ type p2pNetwork struct {
 	// online per se or that we're even connected to them, just that we could try to do so.
 	remoteNodes map[model.NodeID]*model.NodeInfo
 	// remoteNodeAddChannel is used to communicate remote nodes we'd like to add (to remoteNodes)
-	remoteNodeAddChannel chan model.NodeInfo
+	remoteNodeAddChannel chan model.NodeInfo // TODO: Do we actually need this channel or can we just spawn a goroutine instead?
 	// peers is the list of nodes we're actually connected to.
-	peers map[model.PeerID]*peer
+	peers      map[model.PeerID]*peer
+	hashSource HashSource
+}
+type AdvertedHashQueue struct {
+	c chan PeerHash
+}
+
+func (q AdvertedHashQueue) Get() PeerHash {
+	return <-q.c
+}
+
+func (q AdvertedHashQueue) put(hash PeerHash) {
+	q.c <- hash
+}
+
+func (n *p2pNetwork) SetHashSource(source HashSource) {
+	if n.hashSource != nil {
+		panic("Hash source has already been set!")
+	}
+	n.hashSource = source
+}
+
+func (n p2pNetwork) ReceivedConsistencyHashes() PeerHashQueue {
+	return n.receivedConsistencyHashes
+}
+
+func (n p2pNetwork) ReceivedDocumentHashes() PeerHashQueue {
+	return n.receivedDocumentHashes
 }
 
 // Peer represents a connected peer
@@ -46,7 +76,13 @@ func NewP2PNetwork() P2PNetwork {
 	return &p2pNetwork{
 		peers:                make(map[model.PeerID]*peer, 0),
 		remoteNodes:          make(map[model.NodeID]*model.NodeInfo, 0),
-		remoteNodeAddChannel: make(chan model.NodeInfo, 100),
+		remoteNodeAddChannel: make(chan model.NodeInfo, 100), // TODO: Does this number make sense?
+		receivedConsistencyHashes: &AdvertedHashQueue{
+			c: make(chan PeerHash, 100), // TODO: Does this number make sense?
+		},
+		receivedDocumentHashes: &AdvertedHashQueue{
+			c: make(chan PeerHash, 1000), // TODO: Does this number make sense?
+		},
 	}
 }
 
@@ -89,7 +125,7 @@ func (n *p2pNetwork) Stop() error {
 	// Stop client
 	for _, peer := range n.peers {
 		if err := peer.conn.Close(); err != nil {
-			log.Log().Errorf("Unable to close client connection (node: %s)", peer, err)
+			log.Log().Errorf("Unable to close client connection (peer=%s): %v", peer, err)
 		}
 		n.removePeer(peer)
 	}
@@ -101,20 +137,68 @@ func (n *p2pNetwork) AddRemoteNode(nodeInfo model.NodeInfo) {
 	log.Log().Infof("Added remote node to connect to: %s", nodeInfo)
 }
 
-func (n p2pNetwork) AdvertHash(hash []byte) {
-	// TODO: Synchronization
-	msg := network.NetworkMessage{
-		Header: &network.Header{
-			Version: ProtocolVersion,
-		},
-		AdvertLastHash: &network.AdvertLastHash{Hash: hash},
-	}
+func (n p2pNetwork) AdvertConsistencyHash(hash model.Hash) {
+	// TODO: Synchronization on peers?
+	msg := createMessage()
+	msg.AdvertHash = &network.AdvertHash{Hash: hash}
 	for _, peer := range n.peers {
 		if err := peer.gate.Send(&msg); err != nil {
-			log.Log().Errorf("Unable to send message to peer: %s", peer, err)
+			log.Log().Errorf("Unable to send message (peer=%s): %v", peer, err)
 			// TODO: What now?
 		}
 	}
+}
+
+func (n p2pNetwork) QueryHashList(peerId model.PeerID) error {
+	peer := n.peers[peerId]
+	if peer == nil {
+		return fmt.Errorf("unknown peer: %s", peerId)
+	}
+	msg := createMessage()
+	msg.HashListQuery = &network.HashListQuery{}
+	return peer.gate.Send(&msg)
+}
+
+func createMessage() network.NetworkMessage {
+	return network.NetworkMessage{
+		Header: &network.Header{
+			Version: ProtocolVersion,
+		},
+	}
+}
+
+func (n *p2pNetwork) connectToNode(nodeInfo *model.NodeInfo) error {
+	// TODO: Synchronization
+	log.Log().Infof("Connecting to node: %s", nodeInfo)
+	// TODO: Is this the right context?
+	cxt := metadata.NewOutgoingContext(context.Background(), constructMetadata(n.node.ID))
+	conn, err := grpc.DialContext(cxt, nodeInfo.Address, grpc.WithInsecure()) // TODO: Add TLS
+	if err != nil {
+		return err
+	}
+	// TODO: What if two node propagate the same ID? Maybe we shouldn't index our peers based on NodeID?
+	client := network.NewNetworkClient(conn)
+	gate, err := client.Connect(cxt)
+	if err != nil {
+		log.Log().Errorf("Failed to set up stream (node=%s): %v", nodeInfo, err)
+		_ = conn.Close()
+		return err
+	}
+	peer := &peer{
+		id:     model.GetPeerID(nodeInfo.Address),
+		nodeId: nodeInfo.ID,
+		conn:   conn,
+		client: client,
+		gate:   gate,
+		addr:   nodeInfo.Address,
+	}
+	n.addPeer(peer)
+	// TODO: Check NodeID sent by peer
+	go func() {
+		// We can safely ignore the error since all handling (cleaning up after an error) is done by receiveFromPeer
+		_ = n.receiveFromPeer(peer, gate)
+	}()
+	return nil
 }
 
 // connectToRemoteNodes reads from remoteNodeAddChannel to add remote nodes and connect to them
@@ -137,7 +221,7 @@ func (n *p2pNetwork) connectToRemoteNodes() {
 		for _, nodeInfo := range n.remoteNodes {
 			if !n.isConnectedTo(*nodeInfo) {
 				if err := n.connectToNode(nodeInfo); err != nil {
-					log.Log().Warnf("Couldn't connect to node: %s", nodeInfo, err)
+					log.Log().Warnf("Couldn't connect to node (node=%s): %v", nodeInfo, err)
 				}
 			}
 		}
@@ -156,47 +240,6 @@ func (n p2pNetwork) isConnectedTo(nodeInfo model.NodeInfo) bool {
 
 func (n p2pNetwork) isRunning() bool {
 	return n.grpcServer != nil
-}
-
-func (n *p2pNetwork) connectToNode(nodeInfo *model.NodeInfo) error {
-	// TODO: Synchronization
-	log.Log().Infof("Connecting to node: %s", nodeInfo)
-	cxt := metadata.NewOutgoingContext(context.Background(), constructMetadata(n.node.ID))
-	conn, err := grpc.DialContext(cxt, nodeInfo.Address, grpc.WithInsecure()) // TODO: Add TLS
-	if err != nil {
-		return err
-	}
-	// TODO: What if two node propagate the same ID? Maybe we shouldn't index our peers based on NodeID?
-	client := network.NewNetworkClient(conn)
-	gate, err := client.Connect(cxt)
-	if err != nil {
-		log.Log().Errorf("Failed to set up stream to peer: %s", nodeInfo, err)
-		_ = conn.Close()
-		return err
-	}
-	peer := &peer{
-		id:     model.GetPeerID(nodeInfo.Address),
-		nodeId: nodeInfo.ID,
-		conn:   conn,
-		client: client,
-		gate:   gate,
-		addr:   nodeInfo.Address,
-	}
-	n.addPeer(peer)
-	// TODO: Check NodeID sent by peer
-	go func() {
-		// We can safely ignore the error since all handling (cleaning up after an error) is done by receiveFromPeer
-		_ = n.receiveFromPeer(peer, gate)
-	}()
-	return nil
-}
-
-func (n *p2pNetwork) addPeer(peer *peer) {
-	n.peers[peer.id] = peer
-}
-
-func (n *p2pNetwork) removePeer(peer *peer) {
-	n.peers[peer.id] = nil
 }
 
 //func (client networkClient) getLocalHostnames() ([]string, error) {
