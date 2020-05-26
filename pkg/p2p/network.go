@@ -8,15 +8,14 @@ import (
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	"io"
 	"net"
 	"time"
 )
 
 type p2pNetwork struct {
 	node model.NodeInfo
-	// TODO: What if no-one is actually listening to this queue? Maybe we should create it when someone asks for it (lazy initialization)?
-	receivedConsistencyHashes *AdvertedHashQueue
-	receivedDocumentHashes    *AdvertedHashQueue
+
 	/* gRPC server */
 	grpcServer *grpc.Server
 	listener   net.Listener
@@ -27,34 +26,28 @@ type p2pNetwork struct {
 	// remoteNodeAddChannel is used to communicate remote nodes we'd like to add (to remoteNodes)
 	remoteNodeAddChannel chan model.NodeInfo // TODO: Do we actually need this channel or can we just spawn a goroutine instead?
 	// peers is the list of nodes we're actually connected to.
-	peers      map[model.PeerID]*peer
-	hashSource HashSource
-}
-type AdvertedHashQueue struct {
-	c chan PeerHash
+	peers            map[model.PeerID]*peer
+	receivedMessages messageQueue
 }
 
-func (q AdvertedHashQueue) Get() PeerHash {
-	return <-q.c
-}
-
-func (q AdvertedHashQueue) put(hash PeerHash) {
-	q.c <- hash
-}
-
-func (n *p2pNetwork) SetHashSource(source HashSource) {
-	if n.hashSource != nil {
-		panic("Hash source has already been set!")
+func (n p2pNetwork) Broadcast(message *network.NetworkMessage) {
+	for _, peer := range n.peers {
+		if peer.gate.Send(message) != nil {
+			log.Log().Errorf("Unable to broadcast message to peer (peer=%s)", peer.id)
+		}
 	}
-	n.hashSource = source
 }
 
-func (n p2pNetwork) ReceivedConsistencyHashes() PeerHashQueue {
-	return n.receivedConsistencyHashes
+func (n p2pNetwork) ReceivedMessages() MessageQueue {
+	return n.receivedMessages
 }
 
-func (n p2pNetwork) ReceivedDocumentHashes() PeerHashQueue {
-	return n.receivedDocumentHashes
+func (n p2pNetwork) Send(peerId model.PeerID, message *network.NetworkMessage) error {
+	peer := n.peers[peerId]
+	if peer == nil {
+		return fmt.Errorf("unknown peer: %s", peerId)
+	}
+	return peer.gate.Send(message)
 }
 
 // Peer represents a connected peer
@@ -76,14 +69,17 @@ func NewP2PNetwork() P2PNetwork {
 	return &p2pNetwork{
 		peers:                make(map[model.PeerID]*peer, 0),
 		remoteNodes:          make(map[model.NodeID]*model.NodeInfo, 0),
-		remoteNodeAddChannel: make(chan model.NodeInfo, 100), // TODO: Does this number make sense?
-		receivedConsistencyHashes: &AdvertedHashQueue{
-			c: make(chan PeerHash, 100), // TODO: Does this number make sense?
-		},
-		receivedDocumentHashes: &AdvertedHashQueue{
-			c: make(chan PeerHash, 1000), // TODO: Does this number make sense?
-		},
+		remoteNodeAddChannel: make(chan model.NodeInfo, 100),               // TODO: Does this number make sense?
+		receivedMessages:     messageQueue{c: make(chan PeerMessage, 100)}, // TODO: Does this number make sense?
 	}
+}
+
+type messageQueue struct {
+	c chan PeerMessage
+}
+
+func (m messageQueue) Get() PeerMessage {
+	return <-m.c
 }
 
 func (n *p2pNetwork) Start(config P2PNetworkConfig) error {
@@ -137,34 +133,26 @@ func (n *p2pNetwork) AddRemoteNode(nodeInfo model.NodeInfo) {
 	log.Log().Infof("Added remote node to connect to: %s", nodeInfo)
 }
 
-func (n p2pNetwork) AdvertConsistencyHash(hash model.Hash) {
-	// TODO: Synchronization on peers?
-	msg := createMessage()
-	msg.AdvertHash = &network.AdvertHash{Hash: hash}
-	for _, peer := range n.peers {
-		if err := peer.gate.Send(&msg); err != nil {
-			log.Log().Errorf("Unable to send message (peer=%s): %v", peer, err)
-			// TODO: What now?
+// receiveFromPeer reads messages from the peer until it disconnects or the network is stopped.
+func (n p2pNetwork) receiveFromPeer(peer *peer, gate messageGate) {
+	for n.isRunning() {
+		msg, recvErr := gate.Recv()
+		if recvErr != nil {
+			if recvErr == io.EOF {
+				log.Log().Infof("Peer closed connection: %s", peer)
+			} else {
+				log.Log().Errorf("Peer connection error (peer=%s): %v", peer, recvErr)
+			}
+			break
+		}
+		log.Log().Debugf("Received message from peer (%s): %s", peer, msg.String())
+		n.receivedMessages.c <- PeerMessage{
+			Peer:    peer.id,
+			Message: msg,
 		}
 	}
-}
-
-func (n p2pNetwork) QueryHashList(peerId model.PeerID) error {
-	peer := n.peers[peerId]
-	if peer == nil {
-		return fmt.Errorf("unknown peer: %s", peerId)
-	}
-	msg := createMessage()
-	msg.HashListQuery = &network.HashListQuery{}
-	return peer.gate.Send(&msg)
-}
-
-func createMessage() network.NetworkMessage {
-	return network.NetworkMessage{
-		Header: &network.Header{
-			Version: ProtocolVersion,
-		},
-	}
+	// TODO: Synchronization
+	n.removePeer(peer)
 }
 
 func (n *p2pNetwork) connectToNode(nodeInfo *model.NodeInfo) error {
@@ -194,10 +182,7 @@ func (n *p2pNetwork) connectToNode(nodeInfo *model.NodeInfo) error {
 	}
 	n.addPeer(peer)
 	// TODO: Check NodeID sent by peer
-	go func() {
-		// We can safely ignore the error since all handling (cleaning up after an error) is done by receiveFromPeer
-		_ = n.receiveFromPeer(peer, gate)
-	}()
+	go n.receiveFromPeer(peer, gate)
 	return nil
 }
 

@@ -26,6 +26,7 @@ import (
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/pkg/nodelist"
 	"github.com/nuts-foundation/nuts-network/pkg/p2p"
+	"github.com/nuts-foundation/nuts-network/pkg/proto"
 	"github.com/spf13/cobra"
 	"strings"
 	"sync"
@@ -60,6 +61,7 @@ type Network struct {
 	Config      NetworkConfig
 	configOnce  sync.Once
 	p2pNetwork  p2p.P2PNetwork
+	protocol    proto.Protocol
 	documentLog doclog.DocumentLog
 	nodeList    nodelist.NodeList
 }
@@ -70,13 +72,12 @@ var oneRegistry sync.Once
 // NetworkInstance returns the singleton Network
 func NetworkInstance() *Network {
 	oneRegistry.Do(func() {
-		p2pNetwork := p2p.NewP2PNetwork()
-		documentLog := doclog.NewDocumentLog(p2pNetwork)
 		instance = &Network{
-			p2pNetwork:  p2pNetwork,
-			documentLog: documentLog,
-			nodeList:    nodelist.NewNodeList(documentLog),
+			p2pNetwork: p2p.NewP2PNetwork(),
+			protocol:   proto.NewProtocol(),
 		}
+		instance.documentLog = doclog.NewDocumentLog(instance.protocol)
+		instance.nodeList = nodelist.NewNodeList(instance.documentLog)
 	})
 
 	return instance
@@ -109,8 +110,9 @@ func (n *Network) Start() error {
 	if err := n.p2pNetwork.Start(networkConfig); err != nil {
 		return err
 	}
+	n.protocol.Start(n.p2pNetwork, n.documentLog)
 	n.documentLog.Start()
-	n.nodeList.Start(networkConfig.NodeID, "127.0.0.1" + networkConfig.ListenAddress) // TODO: Make configurable
+	n.nodeList.Start(networkConfig.NodeID, "127.0.0.1"+networkConfig.ListenAddress) // TODO: Make configurable
 	return nil
 }
 

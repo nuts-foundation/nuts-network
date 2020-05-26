@@ -3,18 +3,19 @@ package doclog
 import (
 	log "github.com/nuts-foundation/nuts-network/logging"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
-	"github.com/nuts-foundation/nuts-network/pkg/p2p"
+	"github.com/nuts-foundation/nuts-network/pkg/proto"
 	"sort"
 	"time"
 )
 
 const AdvertHashInterval = 2 * time.Second
 
-func NewDocumentLog(p2pNetwork p2p.P2PNetwork) DocumentLog {
+func NewDocumentLog(protocol proto.Protocol) DocumentLog {
 	return &documentLog{
-		p2pNetwork:        p2pNetwork,
+		protocol:          protocol,
 		hash:              model.EmptyHash(),
 		consistencyHashes: make([]model.Hash, 0),
+		entryIndex:        make(map[string]*entry, 0),
 	}
 }
 
@@ -26,19 +27,26 @@ type entry struct {
 }
 
 type documentLog struct {
-	p2pNetwork           p2p.P2PNetwork
+	protocol             proto.Protocol
 	entries              []entry
+	entryIndex           map[string]*entry
 	consistencyHashes    []model.Hash
 	consistencyHashIndex map[string]*entry
 	hash                 model.Hash
 	advertHashTimer      *time.Ticker
 }
 
+func (dl *documentLog) ContainsDocument(hash model.Hash) bool {
+	return dl.entryIndex[hash.String()] != nil
+}
+
 func (dl *documentLog) Add(document *model.Document) {
-	dl.entries = append(dl.entries, entry{
+	entry := entry{
 		hash: document.Hash(),
 		doc:  document,
-	})
+	}
+	dl.entries = append(dl.entries, entry)
+	dl.entryIndex[entry.hash.String()] = &entry
 	// TODO: Isn't there a faster way to keep it sorted (or not sort it at all?)
 	// TODO: Synchronization!
 	sort.Slice(dl.entries, func(i, j int) bool {
@@ -74,7 +82,6 @@ func (dl *documentLog) Stop() {
 }
 
 func (dl *documentLog) Start() {
-	dl.p2pNetwork.SetHashSource(dl)
 	dl.advertHashTimer = time.NewTicker(AdvertHashInterval)
 	go dl.advertHash()
 	go dl.resolveAdvertedHashes()
@@ -84,14 +91,14 @@ func (dl *documentLog) Start() {
 // resolveAdvertedHashes reads
 func (dl documentLog) resolveAdvertedHashes() {
 	// TODO: When to quite the loop?
-	queue := dl.p2pNetwork.ReceivedConsistencyHashes()
+	queue := dl.protocol.ReceivedConsistencyHashes()
 	for {
 		peerHash := queue.Get()
 		log.Log().Infof("Got consistency hash (ours: %s, received: %s)", dl.hash.String(), peerHash.Hash.String())
 		if dl.consistencyHashIndex[peerHash.Hash.String()] == nil {
 			log.Log().Infof("Received unknown consistency hash, will query for document hash list (peer=%s,hash=%s)", peerHash.Peer, peerHash.Hash)
 			// TODO: Don't have multiple parallel queries for the same peer / hash
-			if err := dl.p2pNetwork.QueryHashList(peerHash.Peer); err != nil {
+			if err := dl.protocol.QueryHashList(peerHash.Peer); err != nil {
 				log.Log().Errorf("Could query peer for hash list (peer=%s)", peerHash.Peer, err)
 			}
 		} else {
@@ -105,7 +112,7 @@ func (dl *documentLog) advertHash() {
 		<-dl.advertHashTimer.C
 		if !dl.hash.Empty() {
 			log.Log().Infof("Adverting last hash (%s)", dl.hash)
-			dl.p2pNetwork.AdvertConsistencyHash(dl.hash)
+			dl.protocol.AdvertConsistencyHash(dl.hash)
 		}
 	}
 }

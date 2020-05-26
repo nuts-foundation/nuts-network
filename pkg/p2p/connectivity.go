@@ -12,6 +12,8 @@ import (
 	"strings"
 )
 
+const NodeIDHeader = "nodeId"
+
 type messageGate interface {
 	Send(message *network.NetworkMessage) error
 	Recv() (*network.NetworkMessage, error)
@@ -40,7 +42,8 @@ func (n p2pNetwork) Connect(stream network.Network_ConnectServer) error {
 		addr:   peerCtx.Addr.String(),
 	}
 	n.addPeer(peer)
-	return n.receiveFromPeer(peer, stream)
+	n.receiveFromPeer(peer, stream)
+	return nil
 }
 
 func nodeIdFromMetadata(md metadata.MD) (model.NodeID, error) {
