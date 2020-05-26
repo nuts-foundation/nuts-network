@@ -5,6 +5,7 @@ import (
 	"github.com/nuts-foundation/nuts-network/network"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/pkg/p2p"
+	"time"
 )
 
 type protocol struct {
@@ -76,6 +77,7 @@ func (p protocol) consumeMessages() {
 }
 
 func (p protocol) handleMessage(peerMsg p2p.PeerMessage) error {
+	// TODO: Everything works synchronous here, we might want to introduce some asynchronicity to avoid waiting on each other over the network
 	peer := peerMsg.Peer
 	msg := peerMsg.Message
 	if msg.AdvertHash != nil {
@@ -86,28 +88,59 @@ func (p protocol) handleMessage(peerMsg p2p.PeerMessage) error {
 		})
 	}
 	if msg.HashListQuery != nil {
-		log.Log().Infof("Received hash list query from peer, responding with consistency hash list (peer=%s)", peer)
-		consistencyHashes := p.hashSource.ConsistencyHashes()
+		log.Log().Debugf("Received hash list query from peer, responding with consistency hash list (peer=%s)", peer)
 		msg := createMessage()
 		msg.HashList = &network.HashList{
-			Hash: make([][]byte, len(consistencyHashes)),
+			Hashes: make([]*network.HashInTime, len(p.hashSource.DocumentHashes())),
 		}
-		for i, consistencyHash := range consistencyHashes {
-			msg.HashList.Hash[i] = consistencyHash
+		for i, hash := range p.hashSource.DocumentHashes() {
+			msg.HashList.Hashes[i] = &network.HashInTime{
+				Time: hash.Timestamp.UnixNano(),
+				Hash: hash.Hash,
+			}
 		}
 		if err := p.p2pNetwork.Send(peer, &msg); err != nil {
 			return err
 		}
 	}
 	if msg.HashList != nil {
-		log.Log().Infof("Received hash list from peer (peer=%s)", peer)
-		for _, hash := range msg.HashList.Hash {
-			if !p.hashSource.ContainsDocument(hash) {
-				log.Log().Infof("Received document hash from peer that we don't have yet, will query it (peer=%s,hash=%s)", peer, hash)
-				queryMsg := createMessage()
-				queryMsg.
+		log.Log().Debugf("Received hash list from peer (peer=%s)", peer)
+		for _, hashInTime := range msg.HashList.Hashes {
+			hash := model.Hash(hashInTime.Hash)
+			p.hashSource.AddDocumentHash(hash, time.Unix(0, hashInTime.Time))
+			if !p.hashSource.HasDocument(hash) {
+				log.Log().Infof("Received document hash from peer that we don't have yet, will query it (peer=%s,hash=%s)", peer, model.Hash(hash))
+				responseMsg := createMessage()
+				responseMsg.DocumentQuery = &network.DocumentQuery{Hash: hash}
+				if err := p.p2pNetwork.Send(peer, &responseMsg); err != nil {
+					return err
+				}
 			}
 		}
+	}
+	if msg.DocumentQuery != nil && msg.DocumentQuery.Hash != nil {
+		log.Log().Debugf("Received document query from peer (peer=%s, hash=%s)", peer)
+		hash := model.Hash(msg.DocumentQuery.Hash)
+		document := p.hashSource.GetDocument(hash)
+		if document == nil {
+			log.Log().Warnf("Peer queried us for a document, but we don't appear to have it (peer=%s,document=%s)", peer, hash)
+			return nil
+		}
+		responseMsg := createMessage()
+		responseMsg.Document = &network.Document{
+			Time:     document.Timestamp.UnixNano(),
+			Contents: document.Contents,
+		}
+		if err := p.p2pNetwork.Send(peer, &responseMsg); err != nil {
+			return err
+		}
+	}
+	if msg.Document != nil && msg.Document.Contents != nil {
+		log.Log().Infof("Received document from peer (peer=%s,time=%d)", peer, msg.Document.Time)
+		p.hashSource.AddDocument(&model.Document{
+			Contents:  msg.Document.Contents,
+			Timestamp: time.Unix(0, msg.Document.Time),
+		})
 	}
 	return nil
 }

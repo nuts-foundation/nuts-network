@@ -37,7 +37,12 @@ message HashListQuery {
 
 // Message to inform a peer of our hash list
 message HashList {
-    repeated bytes hash = 1;
+    repeated HashInTime hashes = 1;
+}
+
+message HashInTime {
+    int64 time = 1;
+    bytes hash = 2;
 }
 
 // Message to ask for a peer for a specific document
@@ -46,6 +51,6 @@ message DocumentQuery {
 }
 
 message Document {
-    uint64 time = 1;
+    int64 time = 1;
     bytes contents = 2;
 }

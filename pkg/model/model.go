@@ -10,6 +10,11 @@ import (
 
 const HashSize = 20
 
+type DocumentHash struct {
+	Hash
+	Timestamp time.Time
+}
+
 type Hash []byte
 
 func EmptyHash() Hash {
@@ -62,8 +67,8 @@ func GetPeerID(addr string) PeerID {
 
 // TODO: Should this be an interface?
 type Document struct {
-	Timestamp time.Time
 	Contents  []byte
+	Timestamp time.Time
 }
 
 func (d Document) Hash() Hash {

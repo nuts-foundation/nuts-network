@@ -30,7 +30,7 @@ func (n nodeList) Start(nodeId model.NodeID, address string) {
 		"addr": address,
 	}
 	data, _ := json.Marshal(contents)
-	n.documents.Add(&model.Document{Timestamp: time.Now(), Contents: data})
+	n.documents.AddDocument(&model.Document{Timestamp: time.Now(), Contents: data})
 }
 
 func (n nodeList) Stop() {

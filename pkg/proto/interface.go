@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/pkg/p2p"
+	"time"
 )
 
 const Version = 1
@@ -37,11 +38,13 @@ type PeerHash struct {
 	Hash model.Hash
 }
 
-
 type HashSource interface {
-	ConsistencyHashes() []model.Hash
-	ContainsDocument(hash model.Hash) bool
-	Add(document *model.Document)
+	DocumentHashes() []model.DocumentHash
+	// HasDocument tests whether the document is present for the given hash
+	HasDocument(hash model.Hash) bool
+	GetDocument(hash model.Hash) *model.Document
+	AddDocument(document *model.Document)
+	AddDocumentHash(hash model.Hash, timestamp time.Time)
 }
 
 type AdvertedHashQueue struct {
