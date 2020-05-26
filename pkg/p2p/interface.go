@@ -28,5 +28,6 @@ type PeerMessage struct {
 
 type P2PNetworkConfig struct {
 	NodeID        model.NodeID
+	PublicAddress string
 	ListenAddress string
 }

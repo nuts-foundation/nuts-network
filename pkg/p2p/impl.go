@@ -2,14 +2,18 @@ package p2p
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	log "github.com/nuts-foundation/nuts-network/logging"
 	"github.com/nuts-foundation/nuts-network/network"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
+	errors2 "github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	grpcPeer "google.golang.org/grpc/peer"
 	"io"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -22,12 +26,14 @@ type p2pNetwork struct {
 	/* gRPC client */
 	// remoteNodes is the list of nodes (which we know of) that are part of the network. This doesn't mean they're
 	// online per se or that we're even connected to them, just that we could try to do so.
-	remoteNodes map[model.NodeID]*model.NodeInfo
+	remoteNodes map[model.NodeID]*remoteNode
 	// remoteNodeAddChannel is used to communicate remote nodes we'd like to add (to remoteNodes)
 	remoteNodeAddChannel chan model.NodeInfo // TODO: Do we actually need this channel or can we just spawn a goroutine instead?
 	// peers is the list of nodes we're actually connected to.
 	peers            map[model.PeerID]*peer
+	peersByAddr      map[string]*peer
 	receivedMessages messageQueue
+	publicAddr       string
 }
 
 func (n p2pNetwork) Broadcast(message *network.NetworkMessage) {
@@ -61,6 +67,11 @@ type peer struct {
 	addr string
 }
 
+type remoteNode struct {
+	model.NodeInfo
+	connecting bool
+}
+
 func (p peer) String() string {
 	return fmt.Sprintf("%s(%s)", p.nodeId, p.addr)
 }
@@ -68,7 +79,8 @@ func (p peer) String() string {
 func NewP2PNetwork() P2PNetwork {
 	return &p2pNetwork{
 		peers:                make(map[model.PeerID]*peer, 0),
-		remoteNodes:          make(map[model.NodeID]*model.NodeInfo, 0),
+		peersByAddr:          make(map[string]*peer, 0),
+		remoteNodes:          make(map[model.NodeID]*remoteNode, 0),
 		remoteNodeAddChannel: make(chan model.NodeInfo, 100),               // TODO: Does this number make sense?
 		receivedMessages:     messageQueue{c: make(chan PeerMessage, 100)}, // TODO: Does this number make sense?
 	}
@@ -84,6 +96,7 @@ func (m messageQueue) Get() PeerMessage {
 
 func (n *p2pNetwork) Start(config P2PNetworkConfig) error {
 	log.Log().Infof("Starting gRPC server (ID: %s) on %s", config.NodeID, config.ListenAddress)
+	n.publicAddr = config.PublicAddress
 	var err error
 	n.node.ID = config.NodeID
 	n.listener, err = net.Listen("tcp", config.ListenAddress)
@@ -128,9 +141,11 @@ func (n *p2pNetwork) Stop() error {
 	return nil
 }
 
-func (n *p2pNetwork) AddRemoteNode(nodeInfo model.NodeInfo) {
-	n.remoteNodeAddChannel <- nodeInfo
-	log.Log().Infof("Added remote node to connect to: %s", nodeInfo)
+func (n p2pNetwork) AddRemoteNode(nodeInfo model.NodeInfo) {
+	if !n.isConnectedTo(nodeInfo) {
+		n.remoteNodeAddChannel <- nodeInfo
+		log.Log().Infof("Added remote node to connect to: %s", nodeInfo)
+	}
 }
 
 // receiveFromPeer reads messages from the peer until it disconnects or the network is stopped.
@@ -191,7 +206,10 @@ func (n *p2pNetwork) connectToRemoteNodes() {
 	go func() {
 		for nodeInfo := range n.remoteNodeAddChannel {
 			if n.remoteNodes[nodeInfo.ID] == nil {
-				n.remoteNodes[nodeInfo.ID] = &nodeInfo
+				n.remoteNodes[nodeInfo.ID] = &remoteNode{
+					NodeInfo:   nodeInfo,
+					connecting: false,
+				}
 				log.Log().Infof("Added remote node: %s", nodeInfo)
 			}
 		}
@@ -202,11 +220,14 @@ func (n *p2pNetwork) connectToRemoteNodes() {
 	ticker := time.NewTicker(1 * time.Second)
 	for {
 		// TODO: Exit strategy
+		// TODO: Synchronize
 		<-ticker.C
-		for _, nodeInfo := range n.remoteNodes {
-			if !n.isConnectedTo(*nodeInfo) {
-				if err := n.connectToNode(nodeInfo); err != nil {
-					log.Log().Warnf("Couldn't connect to node (node=%s): %v", nodeInfo, err)
+		for _, remoteNode := range n.remoteNodes {
+			if !remoteNode.connecting && !n.isConnectedTo(remoteNode.NodeInfo) {
+				remoteNode.connecting = true
+				if err := n.connectToNode(&remoteNode.NodeInfo); err != nil {
+					log.Log().Warnf("Couldn't connect to node (node=%s): %v", remoteNode.NodeInfo, err)
+					remoteNode.connecting = false
 				}
 			}
 		}
@@ -215,10 +236,26 @@ func (n *p2pNetwork) connectToRemoteNodes() {
 
 // isConnectedTo checks whether we're currently connected to the given node.
 func (n p2pNetwork) isConnectedTo(nodeInfo model.NodeInfo) bool {
-	for _, peer := range n.peers {
-		if peer.nodeId == nodeInfo.ID {
-			return true
+	log.Log().Infof("Might connect to remote node %s, own address: %s, current peers: %v", nodeInfo, n.publicAddr, n.peersByAddr)
+	if nodeInfo.Address == n.publicAddr {
+		// We're not going to connect to our own node
+		log.Log().Info("Not connecting since it's localhost")
+		return true
+	}
+	// Check connected to node ID?
+	if nodeInfo.ID != "" {
+		for _, peer := range n.peers {
+			if peer.nodeId == nodeInfo.ID {
+				// We're not going to connect to a node we're already connected to
+				log.Log().Infof("Not connecting since we're already connected (nodeID=%s)", nodeInfo.ID)
+				return true
+			}
 		}
+	}
+	if n.isConnectedToAddress(nodeInfo.Address) {
+		// We're not going to connect to a node we're already connected to
+		log.Log().Infof("Not connecting since we're already connected (address=%s)", nodeInfo.Address)
+		return true
 	}
 	return false
 }
@@ -227,33 +264,80 @@ func (n p2pNetwork) isRunning() bool {
 	return n.grpcServer != nil
 }
 
-//func (client networkClient) getLocalHostnames() ([]string, error) {
-//	var result []string
-//	ifaces, err := net.Interfaces()
-//	if err != nil {
-//		return nil, err
-//	}
-//	// handle err
-//	for _, i := range ifaces {
-//		addrs, err := i.Addrs()
-//		if err != nil {
-//			return nil, err
-//		}
-//		// handle err
-//		for _, addr := range addrs {
-//			var ip net.IP
-//			switch v := addr.(type) {
-//			case *net.IPNet:
-//				ip = v.IP
-//			case *net.IPAddr:
-//				ip = v.IP
-//			}
-//			if ip != nil {
-//				result = append(result, ip.String())
-//			} else {
-//				// TODO
-//			}
-//		}
-//	}
-//	return result, nil
-//}
+const NodeIDHeader = "nodeId"
+
+type messageGate interface {
+	Send(message *network.NetworkMessage) error
+	Recv() (*network.NetworkMessage, error)
+}
+
+func (n p2pNetwork) Connect(stream network.Network_ConnectServer) error {
+	peerCtx, _ := grpcPeer.FromContext(stream.Context())
+	log.Log().Infof("New peer connected from %s", peerCtx.Addr)
+	md, ok := metadata.FromIncomingContext(stream.Context())
+	if !ok {
+		return errors.New("unable to get metadata")
+	}
+	nodeId, err := nodeIdFromMetadata(md)
+	if err != nil {
+		return err
+	}
+	// We received our peer's NodeID, now send our own.
+	if err := stream.SendHeader(constructMetadata(n.node.ID)); err != nil {
+		return errors2.Wrap(err, "unable to send headers")
+	}
+	peer := &peer{
+		// TODO
+		id:     model.GetPeerID(peerCtx.Addr.String()),
+		nodeId: nodeId,
+		gate:   stream,
+		addr:   peerCtx.Addr.String(),
+	}
+	n.addPeer(peer)
+	n.receiveFromPeer(peer, stream)
+	return nil
+}
+
+func nodeIdFromMetadata(md metadata.MD) (model.NodeID, error) {
+	vals := md.Get(NodeIDHeader)
+	if len(vals) == 0 {
+		return "", fmt.Errorf("peer didn't send %s header", NodeIDHeader)
+	} else if len(vals) > 1 {
+		return "", fmt.Errorf("peer sent multiple values for %s header", NodeIDHeader)
+	}
+	return model.NodeID(strings.TrimSpace(vals[0])), nil
+}
+
+func constructMetadata(nodeId model.NodeID) metadata.MD {
+	return metadata.New(map[string]string{NodeIDHeader: string(nodeId)})
+}
+
+func (n *p2pNetwork) addPeer(peer *peer) {
+	n.peers[peer.id] = peer
+	n.peersByAddr[normalizeAddress(peer.addr)] = peer
+}
+
+func (n p2pNetwork) isConnectedToAddress(addr string) bool {
+	return n.peersByAddr[normalizeAddress(addr)] != nil
+}
+
+func normalizeAddress(addr string) string {
+	var normalizedAddr string
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		normalizedAddr = addr
+	} else {
+		if host == "localhost" {
+			host = "127.0.0.1"
+			normalizedAddr = net.JoinHostPort(host, port)
+		} else {
+			normalizedAddr = addr
+		}
+	}
+	return normalizedAddr
+}
+
+func (n *p2pNetwork) removePeer(peer *peer) {
+	delete(n.peers, peer.id)
+	delete(n.peersByAddr, peer.addr)
+}

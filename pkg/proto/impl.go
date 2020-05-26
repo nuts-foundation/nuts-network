@@ -130,16 +130,18 @@ func (p protocol) handleMessage(peerMsg p2p.PeerMessage) error {
 		responseMsg.Document = &network.Document{
 			Time:     document.Timestamp.UnixNano(),
 			Contents: document.Contents,
+			Type:     document.Type,
 		}
 		if err := p.p2pNetwork.Send(peer, &responseMsg); err != nil {
 			return err
 		}
 	}
 	if msg.Document != nil && msg.Document.Contents != nil {
-		log.Log().Infof("Received document from peer (peer=%s,time=%d)", peer, msg.Document.Time)
+		log.Log().Infof("Received document from peer (peer=%s,time=%d,type=%s)", peer, msg.Document.Time, msg.Document.Type)
 		p.hashSource.AddDocument(&model.Document{
 			Contents:  msg.Document.Contents,
 			Timestamp: time.Unix(0, msg.Document.Time),
+			Type:      msg.Document.Type,
 		})
 	}
 	return nil

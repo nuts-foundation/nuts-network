@@ -22,7 +22,7 @@ package pkg
 import (
 	"errors"
 	core "github.com/nuts-foundation/nuts-go-core"
-	"github.com/nuts-foundation/nuts-network/pkg/doclog"
+	"github.com/nuts-foundation/nuts-network/pkg/documentlog"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/pkg/nodelist"
 	"github.com/nuts-foundation/nuts-network/pkg/p2p"
@@ -30,6 +30,7 @@ import (
 	"github.com/spf13/cobra"
 	"strings"
 	"sync"
+	"time"
 )
 
 // ModuleName defines the name of this module
@@ -41,7 +42,10 @@ type NetworkClient interface {
 
 // NetworkConfig holds the config
 type NetworkConfig struct {
-	GrpcAddr       string
+	// Socket address for gRPC to listen on
+	GrpcAddr string
+	// Public address of this nodes other nodes can use to connect to this node.
+	PublicAddr     string
 	BootstrapNodes string
 }
 
@@ -62,7 +66,7 @@ type Network struct {
 	configOnce  sync.Once
 	p2pNetwork  p2p.P2PNetwork
 	protocol    proto.Protocol
-	documentLog doclog.DocumentLog
+	documentLog documentlog.DocumentLog
 	nodeList    nodelist.NodeList
 }
 
@@ -76,8 +80,8 @@ func NetworkInstance() *Network {
 			p2pNetwork: p2p.NewP2PNetwork(),
 			protocol:   proto.NewProtocol(),
 		}
-		instance.documentLog = doclog.NewDocumentLog(instance.protocol)
-		instance.nodeList = nodelist.NewNodeList(instance.documentLog)
+		instance.documentLog = documentlog.NewDocumentLog(instance.protocol)
+		instance.nodeList = nodelist.NewNodeList(instance.documentLog, instance.p2pNetwork)
 	})
 
 	return instance
@@ -113,6 +117,14 @@ func (n *Network) Start() error {
 	n.protocol.Start(n.p2pNetwork, n.documentLog)
 	n.documentLog.Start()
 	n.nodeList.Start(networkConfig.NodeID, "127.0.0.1"+networkConfig.ListenAddress) // TODO: Make configurable
+	return nil
+}
+
+func (n *Network) AddDocument(contents []byte) error {
+	n.documentLog.AddDocument(&model.Document{
+		Contents:  contents,
+		Timestamp: time.Now(),
+	})
 	return nil
 }
 

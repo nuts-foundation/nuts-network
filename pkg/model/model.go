@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha1"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -68,11 +69,18 @@ func GetPeerID(addr string) PeerID {
 // TODO: Should this be an interface?
 type Document struct {
 	Contents  []byte
+	Type      string
 	Timestamp time.Time
 }
 
 func (d Document) Hash() Hash {
-	h := sha1.Sum(d.Contents)
+	input := map[string]interface{}{
+		"contents": d.Contents,
+		"type": d.Type,
+		"timestamp": d.Timestamp.UnixNano(),
+	}
+	data, _ := json.Marshal(input)
+	h := sha1.Sum(data)
 	return h[:]
 }
 

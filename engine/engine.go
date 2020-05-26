@@ -45,6 +45,7 @@ func NewNetworkEngine() *core.Engine {
 func flagSet() *pflag.FlagSet {
 	flagSet := pflag.NewFlagSet("network", pflag.ContinueOnError)
 	flagSet.String("grpcAddr", ":5555", "gRPC address to listen on")
+	flagSet.String("publicAddr", "", "Public address other nodes can connect to. If empty, the node will not be registered on the nodelist.")
 	flagSet.String("bootstrapNodes", "", "Space-separated list of bootstrap node addresses")
 	return flagSet
 }
@@ -70,6 +71,15 @@ func cmd() *cobra.Command {
 			// TODO
 			c := make(chan bool, 1)
 			<-c
+		},
+	})
+
+	cmd.AddCommand(&cobra.Command{
+		Use: "add",
+		Short: "Add a document to the network",
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return pkg.NetworkInstance().AddDocument([]byte(args[0]))
 		},
 	})
 	return cmd

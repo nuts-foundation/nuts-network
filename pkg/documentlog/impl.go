@@ -1,4 +1,4 @@
-package doclog
+package documentlog
 
 import (
 	log "github.com/nuts-foundation/nuts-network/logging"
@@ -16,6 +16,7 @@ func NewDocumentLog(protocol proto.Protocol) DocumentLog {
 		lastConsistencyHash: model.EmptyHash(),
 		documentHashes:      make([]model.DocumentHash, 0),
 		documentHashIndex:   make(map[string]*entry, 0),
+		subscriptions:       make([]documentQueue, 0),
 	}
 }
 
@@ -40,6 +41,31 @@ type documentLog struct {
 	consistencyHashIndex map[string]*entry
 	lastConsistencyHash  model.Hash
 	advertHashTimer      *time.Ticker
+	subscriptions        []documentQueue
+	publicAddr           string
+}
+
+func (dl *documentLog) Configure(publicAddr string) {
+	dl.publicAddr = publicAddr
+}
+
+type documentQueue struct {
+	documentType string
+	c            chan *model.Document
+}
+
+func (q documentQueue) Get() *model.Document {
+	return <-q.c
+}
+
+func (dl *documentLog) Subscribe(documentType string) DocumentQueue {
+	// TODO: Syncrhonize
+	queue := documentQueue{
+		documentType: documentType,
+		c:            make(chan *model.Document, 100), // TODO: Does this number make sense?
+	}
+	dl.subscriptions = append(dl.subscriptions, queue)
+	return &queue
 }
 
 func (dl documentLog) GetDocument(hash model.Hash) *model.Document {
@@ -99,7 +125,17 @@ func (dl *documentLog) AddDocumentHash(hash model.Hash, timestamp time.Time) {
 
 func (dl *documentLog) AddDocument(document *model.Document) {
 	dl.AddDocumentHash(document.Hash(), document.Timestamp)
-	dl.documentHashIndex[document.Hash().String()].doc = document
+
+	entry := dl.documentHashIndex[document.Hash().String()]
+	if entry.doc == nil {
+		entry.doc = document
+		// TODO: Synchronization
+		for _, sub := range dl.subscriptions {
+			if sub.documentType == document.Type {
+				sub.c <- document
+			}
+		}
+	}
 }
 
 func (dl *documentLog) DocumentHashes() []model.DocumentHash {

@@ -52,5 +52,6 @@ message DocumentQuery {
 
 message Document {
     int64 time = 1;
-    bytes contents = 2;
+    string type = 2;
+    bytes contents = 10;
 }
