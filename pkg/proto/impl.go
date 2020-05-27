@@ -47,7 +47,7 @@ func (p *protocol) Start(p2pNetwork p2p.P2PNetwork, hashSource HashSource) {
 }
 
 func (p protocol) Stop() {
-	panic("implement me")
+
 }
 
 func (p protocol) ReceivedConsistencyHashes() PeerHashQueue {

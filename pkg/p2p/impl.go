@@ -12,29 +12,30 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	grpcPeer "google.golang.org/grpc/peer"
-	"io"
 	"net"
 	"strings"
+	"sync"
 	"time"
 )
 
 type p2pNetwork struct {
-	node model.NodeInfo
+	node       model.NodeInfo
+	publicAddr string
 
-	/* gRPC server */
 	grpcServer *grpc.Server
 	listener   net.Listener
-	/* gRPC client */
+
 	// remoteNodes is the list of nodes (which we know of) that are part of the network. This doesn't mean they're
 	// online per se or that we're even connected to them, just that we could try to do so.
 	remoteNodes map[model.NodeID]*remoteNode
 	// remoteNodeAddChannel is used to communicate remote nodes we'd like to add (to remoteNodes)
 	remoteNodeAddChannel chan model.NodeInfo // TODO: Do we actually need this channel or can we just spawn a goroutine instead?
-	// peers is the list of nodes we're actually connected to.
-	peers            map[model.PeerID]*peer
+	// peers is the list of nodes we're actually connected to. Access MUST be wrapped in locking using peerReadLock and peerWriteLock!
+	peers map[model.PeerID]*peer
+	// peersByAddr Access MUST be wrapped in locking using peerReadLock and peerWriteLock
 	peersByAddr      map[string]*peer
+	peerMutex        *sync.RWMutex
 	receivedMessages messageQueue
-	publicAddr       string
 }
 
 func (n p2pNetwork) Diagnostics() []core.DiagnosticResult {
@@ -47,22 +48,24 @@ func (n p2pNetwork) Diagnostics() []core.DiagnosticResult {
 
 func (n p2pNetwork) Peers() []Peer {
 	var result []Peer
-	for _, peer := range n.peers {
-		result = append(result, Peer{
-			NodeID:  peer.nodeId,
-			PeerID:  peer.id,
-			Address: peer.addr,
-		})
-	}
+	n.peerReadLock(func() {
+		for _, peer := range n.peers {
+			result = append(result, Peer{
+				NodeID:  peer.nodeId,
+				PeerID:  peer.id,
+				Address: peer.addr,
+			})
+		}
+	})
 	return result
 }
 
-func (n p2pNetwork) Broadcast(message *network.NetworkMessage) {
-	for _, peer := range n.peers {
-		if peer.gate.Send(message) != nil {
-			log.Log().Errorf("Unable to broadcast message to peer (peer=%s)", peer.id)
+func (n *p2pNetwork) Broadcast(message *network.NetworkMessage) {
+	n.peerReadLock(func() {
+		for _, peer := range n.peers {
+			peer.outMessages <- message
 		}
-	}
+	})
 }
 
 func (n p2pNetwork) ReceivedMessages() MessageQueue {
@@ -70,22 +73,15 @@ func (n p2pNetwork) ReceivedMessages() MessageQueue {
 }
 
 func (n p2pNetwork) Send(peerId model.PeerID, message *network.NetworkMessage) error {
-	peer := n.peers[peerId]
+	var peer *peer
+	n.peerReadLock(func() {
+		peer = n.peers[peerId]
+	})
 	if peer == nil {
 		return fmt.Errorf("unknown peer: %s", peerId)
 	}
-	return peer.gate.Send(message)
-}
-
-// Peer represents a connected peer
-type peer struct {
-	id     model.PeerID
-	nodeId model.NodeID
-	client network.NetworkClient
-	gate   messageGate
-	// conn is only filled for peers where we're the connecting party
-	conn *grpc.ClientConn
-	addr string
+	peer.outMessages <- message
+	return nil
 }
 
 type remoteNode struct {
@@ -93,16 +89,13 @@ type remoteNode struct {
 	connecting bool
 }
 
-func (p peer) String() string {
-	return fmt.Sprintf("%s(%s)", p.nodeId, p.addr)
-}
-
 func NewP2PNetwork() P2PNetwork {
 	return &p2pNetwork{
 		peers:                make(map[model.PeerID]*peer, 0),
 		peersByAddr:          make(map[string]*peer, 0),
 		remoteNodes:          make(map[model.NodeID]*remoteNode, 0),
-		remoteNodeAddChannel: make(chan model.NodeInfo, 100),               // TODO: Does this number make sense?
+		remoteNodeAddChannel: make(chan model.NodeInfo, 100), // TODO: Does this number make sense?
+		peerMutex:            &sync.RWMutex{},
 		receivedMessages:     messageQueue{c: make(chan PeerMessage, 100)}, // TODO: Does this number make sense?
 	}
 }
@@ -153,11 +146,11 @@ func (n *p2pNetwork) Stop() error {
 	}
 	close(n.remoteNodeAddChannel)
 	// Stop client
+	// TODO: Synchronization on peers?
 	for _, peer := range n.peers {
 		if err := peer.conn.Close(); err != nil {
 			log.Log().Errorf("Unable to close client connection (peer=%s): %v", peer, err)
 		}
-		n.removePeer(peer)
 	}
 	return nil
 }
@@ -167,28 +160,6 @@ func (n p2pNetwork) AddRemoteNode(nodeInfo model.NodeInfo) {
 		n.remoteNodeAddChannel <- nodeInfo
 		log.Log().Infof("Added remote node to connect to: %s", nodeInfo)
 	}
-}
-
-// receiveFromPeer reads messages from the peer until it disconnects or the network is stopped.
-func (n p2pNetwork) receiveFromPeer(peer *peer, gate messageGate) {
-	for n.isRunning() {
-		msg, recvErr := gate.Recv()
-		if recvErr != nil {
-			if recvErr == io.EOF {
-				log.Log().Infof("Peer closed connection: %s", peer)
-			} else {
-				log.Log().Errorf("Peer connection error (peer=%s): %v", peer, recvErr)
-			}
-			break
-		}
-		log.Log().Tracef("Received message from peer (%s): %s", peer, msg.String())
-		n.receivedMessages.c <- PeerMessage{
-			Peer:    peer.id,
-			Message: msg,
-		}
-	}
-	// TODO: Synchronization
-	n.removePeer(peer)
 }
 
 func (n *p2pNetwork) connectToNode(nodeInfo *model.NodeInfo) error {
@@ -216,10 +187,17 @@ func (n *p2pNetwork) connectToNode(nodeInfo *model.NodeInfo) error {
 		gate:   gate,
 		addr:   nodeInfo.Address,
 	}
+	n.sendAndReceiveForPeer(peer)
+	return nil
+}
+
+func (n *p2pNetwork) sendAndReceiveForPeer(peer *peer) {
+	go peer.startSending()
 	n.addPeer(peer)
 	// TODO: Check NodeID sent by peer
-	go n.receiveFromPeer(peer, gate)
-	return nil
+	peer.startReceiving(peer, n.receivedMessages)
+	// When we reach this line, startReceiving has exited which means the connection has been closed.
+	n.removePeer(peer)
 }
 
 // connectToRemoteNodes reads from remoteNodeAddChannel to add remote nodes and connect to them
@@ -259,28 +237,30 @@ func (n *p2pNetwork) connectToRemoteNodes() {
 
 // shouldConnectTo checks whether we should connect to the given node.
 func (n p2pNetwork) shouldConnectTo(nodeInfo model.NodeInfo) bool {
-	log.Log().Debugf("Might connect to remote node %s, own address: %s, current peers: %v", nodeInfo, n.publicAddr, n.peersByAddr)
 	if normalizeAddress(nodeInfo.Address) == normalizeAddress(n.publicAddr) {
 		// We're not going to connect to our own node
 		log.Log().Debug("Not connecting since it's localhost")
 		return false
 	}
-	// Check connected to node ID?
-	if nodeInfo.ID != "" {
-		for _, peer := range n.peers {
-			if peer.nodeId == nodeInfo.ID {
-				// We're not going to connect to a node we're already connected to
-				log.Log().Debugf("Not connecting since we're already connected (nodeID=%s)", nodeInfo.ID)
-				return false
+	var result = true
+	n.peerReadLock(func() {
+		if nodeInfo.ID != "" {
+			for _, peer := range n.peers {
+				if peer.nodeId == nodeInfo.ID {
+					// We're not going to connect to a node we're already connected to
+					log.Log().Debugf("Not connecting since we're already connected (NodeID=%s)", nodeInfo.ID)
+					result = false
+					return
+				}
 			}
 		}
-	}
-	if n.isConnectedToAddress(nodeInfo.Address) {
-		// We're not going to connect to a node we're already connected to
-		log.Log().Debugf("Not connecting since we're already connected (address=%s)", nodeInfo.Address)
-		return false
-	}
-	return true
+		if n.peersByAddr[normalizeAddress(nodeInfo.Address)] != nil {
+			// We're not going to connect to a node we're already connected to
+			log.Log().Debugf("Not connecting since we're already connected (address=%s)", nodeInfo.Address)
+			result = false
+		}
+	})
+	return result
 }
 
 func (n p2pNetwork) isRunning() bool {
@@ -316,8 +296,7 @@ func (n p2pNetwork) Connect(stream network.Network_ConnectServer) error {
 		gate:   stream,
 		addr:   peerCtx.Addr.String(),
 	}
-	n.addPeer(peer)
-	n.receiveFromPeer(peer, stream)
+	n.sendAndReceiveForPeer(peer)
 	return nil
 }
 
@@ -336,12 +315,34 @@ func constructMetadata(nodeId model.NodeID) metadata.MD {
 }
 
 func (n *p2pNetwork) addPeer(peer *peer) {
-	n.peers[peer.id] = peer
-	n.peersByAddr[normalizeAddress(peer.addr)] = peer
+	n.peerWriteLock(func() {
+		n.peers[peer.id] = peer
+		n.peersByAddr[normalizeAddress(peer.addr)] = peer
+	})
 }
 
-func (n p2pNetwork) isConnectedToAddress(addr string) bool {
-	return n.peersByAddr[normalizeAddress(addr)] != nil
+func (n *p2pNetwork) removePeer(peer *peer) {
+	n.peerWriteLock(func() {
+		peer = n.peers[peer.id]
+		if peer == nil {
+			n.peerMutex.Unlock()
+			return
+		}
+
+		delete(n.peers, peer.id)
+		delete(n.peersByAddr, normalizeAddress(peer.addr))
+	})
+}
+func (n *p2pNetwork) peerWriteLock(f func()) {
+	n.peerMutex.Lock()
+	f()
+	n.peerMutex.Unlock()
+}
+
+func (n *p2pNetwork) peerReadLock(f func()) {
+	n.peerMutex.RLock()
+	f()
+	n.peerMutex.RUnlock()
 }
 
 func normalizeAddress(addr string) string {
@@ -358,9 +359,4 @@ func normalizeAddress(addr string) string {
 		}
 	}
 	return normalizedAddr
-}
-
-func (n *p2pNetwork) removePeer(peer *peer) {
-	delete(n.peers, peer.id)
-	delete(n.peersByAddr, normalizeAddress(peer.addr))
 }

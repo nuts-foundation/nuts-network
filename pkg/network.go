@@ -22,6 +22,7 @@ package pkg
 import (
 	"errors"
 	core "github.com/nuts-foundation/nuts-go-core"
+	log "github.com/nuts-foundation/nuts-network/logging"
 	"github.com/nuts-foundation/nuts-network/pkg/documentlog"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/pkg/nodelist"
@@ -111,10 +112,10 @@ func (n *Network) Start() error {
 	networkConfig := p2p.P2PNetworkConfig{
 		ListenAddress: n.Config.GrpcAddr,
 		PublicAddress: n.Config.PublicAddr,
+		NodeID:        model.NodeID(n.Config.NodeID),
 	}
-	if n.Config.NodeID != "" {
-		networkConfig.NodeID = model.NodeID(n.Config.NodeID)
-	} else {
+	if networkConfig.NodeID == "" {
+		log.Log().Warn("NodeID not configured, will use node identity.")
 		networkConfig.NodeID = model.NodeID(core.NutsConfig().Identity())
 	}
 	if err := n.p2pNetwork.Start(networkConfig); err != nil {
