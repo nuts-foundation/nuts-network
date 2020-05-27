@@ -12,13 +12,15 @@ import (
 const nodeInfoDocumentType = "node-info"
 
 type nodeList struct {
-	documents  documentlog.DocumentLog
-	p2pNetwork p2p.P2PNetwork
-	publicAddr string
+	documents             documentlog.DocumentLog
+	p2pNetwork            p2p.P2PNetwork
+	publicAddr            string
 }
 
 func (n *nodeList) Start(nodeId model.NodeID, publicAddr string) {
-	// TODO: Test if already registered
+	// TODO: Test if already registered by examining local copy to avoid creating waste (duplicate documents) on the network.
+	//  If not in the local copy, we should not autoregister our node but this should be done via a command.
+	//  This process can be made easier by registering our node info when `registry register-vendor` is executed.
 	if publicAddr != "" {
 		n.publicAddr = publicAddr
 		log.Log().Infof("Registering local node on nodelist (id=%s,addr=%s)", nodeId, publicAddr)

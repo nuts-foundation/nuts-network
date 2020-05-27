@@ -1,6 +1,7 @@
 package documentlog
 
 import (
+	"github.com/nuts-foundation/nuts-go-core"
 	log "github.com/nuts-foundation/nuts-network/logging"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/pkg/proto"
@@ -43,6 +44,20 @@ type documentLog struct {
 	advertHashTimer      *time.Ticker
 	subscriptions        []documentQueue
 	publicAddr           string
+}
+
+func (dl *documentLog) Diagnostics() []core.DiagnosticResult {
+	var sizeInBytes int
+	for _, entry := range dl.entries {
+		if entry.doc != nil {
+			sizeInBytes += len(entry.doc.Contents)
+		}
+	}
+	return []core.DiagnosticResult{
+		LastConsistencyHashDiagnostic{Hash: dl.lastConsistencyHash},
+		NumberOfDocumentsDiagnostic{NumberOfDocuments: len(dl.entries)},
+		LogSizeDiagnostic{SizeInBytes: sizeInBytes},
+	}
 }
 
 func (dl *documentLog) Configure(publicAddr string) {
@@ -179,8 +194,6 @@ func (dl *documentLog) advertHash() {
 		if !dl.lastConsistencyHash.Empty() {
 			log.Log().Debugf("Adverting last hash (%s)", dl.lastConsistencyHash)
 			dl.protocol.AdvertConsistencyHash(dl.lastConsistencyHash)
-		} else {
-			log.Log().Info("Last hash is empty")
 		}
 	}
 }

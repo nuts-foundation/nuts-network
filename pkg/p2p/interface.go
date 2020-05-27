@@ -1,6 +1,8 @@
 package p2p
 
 import (
+	"fmt"
+	core "github.com/nuts-foundation/nuts-go-core"
 	"github.com/nuts-foundation/nuts-network/network"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 )
@@ -15,10 +17,26 @@ type P2PNetwork interface {
 	ReceivedMessages() MessageQueue
 	Send(peer model.PeerID, message *network.NetworkMessage) error
 	Broadcast(message *network.NetworkMessage)
+	// Peers returns the peers we're currently connected to
+	Peers() []Peer
+	Diagnostics() []core.DiagnosticResult
 }
 
 type MessageQueue interface {
 	Get() PeerMessage
+}
+
+type Peer struct {
+	NodeID  model.NodeID
+	PeerID  model.PeerID
+	Address string
+}
+
+func (p Peer) String() string {
+	if p.NodeID != "" {
+		return fmt.Sprintf("%s(Node=%s)", p.Address, p.NodeID)
+	}
+	return p.Address
 }
 
 type PeerMessage struct {

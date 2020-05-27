@@ -23,16 +23,12 @@ import (
 	cfg "github.com/nuts-foundation/nuts-go-core"
 	"github.com/nuts-foundation/nuts-network/engine"
 	"github.com/sirupsen/logrus"
-	"os"
 )
 
 var e = engine.NewNetworkEngine()
 var rootCmd = e.Cmd
 
 func Execute() {
-	// TODO: Remove this
-	os.Setenv("NUTS_IDENTITY", "urn:oid:1.3.6.1.4.1.54851.4:00000001")
-
 	c := cfg.NewNutsGlobalConfig()
 	c.IgnoredPrefixes = append(c.IgnoredPrefixes, e.ConfigKey)
 	c.RegisterFlags(rootCmd, e)
@@ -57,6 +53,7 @@ func Execute() {
 
 	defer e.Shutdown()
 
+	rootCmd.SetArgs([]string{"server"})
 	rootCmd.Execute()
 
 	println("EXIT")

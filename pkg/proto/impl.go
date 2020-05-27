@@ -1,6 +1,7 @@
 package proto
 
 import (
+	core "github.com/nuts-foundation/nuts-go-core"
 	log "github.com/nuts-foundation/nuts-network/logging"
 	"github.com/nuts-foundation/nuts-network/network"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
@@ -14,6 +15,18 @@ type protocol struct {
 	// TODO: What if no-one is actually listening to this queue? Maybe we should create it when someone asks for it (lazy initialization)?
 	receivedConsistencyHashes *AdvertedHashQueue
 	receivedDocumentHashes    *AdvertedHashQueue
+	peerHashes                map[model.PeerID]model.Hash
+}
+
+func (p *protocol) Diagnostics() []core.DiagnosticResult {
+	// Return map copy so callers can't mess up our internal state
+	h := make(map[model.PeerID]model.Hash)
+	for peer, hash := range p.peerHashes {
+		h[peer] = hash
+	}
+	return []core.DiagnosticResult{
+		peerConsistencyHashDiagnostic{h},
+	}
 }
 
 func NewProtocol() Protocol {
@@ -119,8 +132,8 @@ func (p protocol) handleMessage(peerMsg p2p.PeerMessage) error {
 		}
 	}
 	if msg.DocumentQuery != nil && msg.DocumentQuery.Hash != nil {
-		log.Log().Debugf("Received document query from peer (peer=%s, hash=%s)", peer)
 		hash := model.Hash(msg.DocumentQuery.Hash)
+		log.Log().Debugf("Received document query from peer (peer=%s, hash=%s)", peer, hash)
 		document := p.hashSource.GetDocument(hash)
 		if document == nil {
 			log.Log().Warnf("Peer queried us for a document, but we don't appear to have it (peer=%s,document=%s)", peer, hash)

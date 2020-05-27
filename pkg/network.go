@@ -110,13 +110,14 @@ func (n *Network) Start() error {
 	networkConfig := p2p.P2PNetworkConfig{
 		NodeID:        model.NodeID(core.NutsConfig().Identity()), // TODO: Is this right?
 		ListenAddress: n.Config.GrpcAddr,
+		PublicAddress: n.Config.PublicAddr,
 	}
 	if err := n.p2pNetwork.Start(networkConfig); err != nil {
 		return err
 	}
 	n.protocol.Start(n.p2pNetwork, n.documentLog)
 	n.documentLog.Start()
-	n.nodeList.Start(networkConfig.NodeID, "127.0.0.1"+networkConfig.ListenAddress) // TODO: Make configurable
+	n.nodeList.Start(networkConfig.NodeID, networkConfig.PublicAddress)
 	return nil
 }
 
@@ -133,4 +134,12 @@ func (n *Network) Shutdown() error {
 	n.nodeList.Stop()
 	n.documentLog.Stop()
 	return n.p2pNetwork.Stop()
+}
+
+func (n *Network) Diagnostics() []core.DiagnosticResult {
+	var result = make([]core.DiagnosticResult, 0)
+	result = append(result, n.documentLog.Diagnostics()...)
+	result = append(result, n.protocol.Diagnostics()...)
+	result = append(result, n.p2pNetwork.Diagnostics()...)
+	return result
 }

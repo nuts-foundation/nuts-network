@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/nuts-foundation/nuts-go-core"
 	log "github.com/nuts-foundation/nuts-network/logging"
 	"github.com/nuts-foundation/nuts-network/network"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
@@ -34,6 +35,24 @@ type p2pNetwork struct {
 	peersByAddr      map[string]*peer
 	receivedMessages messageQueue
 	publicAddr       string
+}
+
+func (n p2pNetwork) Diagnostics() []core.DiagnosticResult {
+	return []core.DiagnosticResult{
+		PeersDiagnosticsResult{Peers: n.Peers()},
+	}
+}
+
+func (n p2pNetwork) Peers() []Peer {
+	var result []Peer
+	for _, peer := range n.peers {
+		result = append(result, Peer{
+			NodeID:  peer.nodeId,
+			PeerID:  peer.id,
+			Address: peer.addr,
+		})
+	}
+	return result
 }
 
 func (n p2pNetwork) Broadcast(message *network.NetworkMessage) {
@@ -142,7 +161,7 @@ func (n *p2pNetwork) Stop() error {
 }
 
 func (n p2pNetwork) AddRemoteNode(nodeInfo model.NodeInfo) {
-	if !n.isConnectedTo(nodeInfo) {
+	if n.shouldConnectTo(nodeInfo) {
 		n.remoteNodeAddChannel <- nodeInfo
 		log.Log().Infof("Added remote node to connect to: %s", nodeInfo)
 	}
@@ -160,7 +179,7 @@ func (n p2pNetwork) receiveFromPeer(peer *peer, gate messageGate) {
 			}
 			break
 		}
-		log.Log().Debugf("Received message from peer (%s): %s", peer, msg.String())
+		log.Log().Tracef("Received message from peer (%s): %s", peer, msg.String())
 		n.receivedMessages.c <- PeerMessage{
 			Peer:    peer.id,
 			Message: msg,
@@ -223,24 +242,26 @@ func (n *p2pNetwork) connectToRemoteNodes() {
 		// TODO: Synchronize
 		<-ticker.C
 		for _, remoteNode := range n.remoteNodes {
-			if !remoteNode.connecting && !n.isConnectedTo(remoteNode.NodeInfo) {
+			if !remoteNode.connecting && n.shouldConnectTo(remoteNode.NodeInfo) {
 				remoteNode.connecting = true
 				if err := n.connectToNode(&remoteNode.NodeInfo); err != nil {
 					log.Log().Warnf("Couldn't connect to node (node=%s): %v", remoteNode.NodeInfo, err)
-					remoteNode.connecting = false
+				} else {
+					log.Log().Infof("Connected to node: %s", remoteNode.NodeInfo)
 				}
+				remoteNode.connecting = false
 			}
 		}
 	}
 }
 
-// isConnectedTo checks whether we're currently connected to the given node.
-func (n p2pNetwork) isConnectedTo(nodeInfo model.NodeInfo) bool {
+// shouldConnectTo checks whether we should connect to the given node.
+func (n p2pNetwork) shouldConnectTo(nodeInfo model.NodeInfo) bool {
 	log.Log().Debugf("Might connect to remote node %s, own address: %s, current peers: %v", nodeInfo, n.publicAddr, n.peersByAddr)
-	if nodeInfo.Address == n.publicAddr {
+	if normalizeAddress(nodeInfo.Address) == normalizeAddress(n.publicAddr) {
 		// We're not going to connect to our own node
 		log.Log().Debug("Not connecting since it's localhost")
-		return true
+		return false
 	}
 	// Check connected to node ID?
 	if nodeInfo.ID != "" {
@@ -248,16 +269,16 @@ func (n p2pNetwork) isConnectedTo(nodeInfo model.NodeInfo) bool {
 			if peer.nodeId == nodeInfo.ID {
 				// We're not going to connect to a node we're already connected to
 				log.Log().Debugf("Not connecting since we're already connected (nodeID=%s)", nodeInfo.ID)
-				return true
+				return false
 			}
 		}
 	}
 	if n.isConnectedToAddress(nodeInfo.Address) {
 		// We're not going to connect to a node we're already connected to
 		log.Log().Debugf("Not connecting since we're already connected (address=%s)", nodeInfo.Address)
-		return true
+		return false
 	}
-	return false
+	return true
 }
 
 func (n p2pNetwork) isRunning() bool {
@@ -339,5 +360,5 @@ func normalizeAddress(addr string) string {
 
 func (n *p2pNetwork) removePeer(peer *peer) {
 	delete(n.peers, peer.id)
-	delete(n.peersByAddr, peer.addr)
+	delete(n.peersByAddr, normalizeAddress(peer.addr))
 }

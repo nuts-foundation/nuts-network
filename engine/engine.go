@@ -20,25 +20,30 @@
 package engine
 
 import (
+	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	core "github.com/nuts-foundation/nuts-go-core"
 	logging "github.com/nuts-foundation/nuts-network/logging"
 	pkg "github.com/nuts-foundation/nuts-network/pkg"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"os"
+	"os/signal"
 )
 
 // NewNetworkEngine returns the core definition for the network
 func NewNetworkEngine() *core.Engine {
 	engine := pkg.NetworkInstance()
 	return &core.Engine{
-		Cmd:       cmd(),
-		Configure: engine.Configure,
-		Config:    &engine.Config,
-		ConfigKey: "network",
-		FlagSet:   flagSet(),
-		Name:      pkg.ModuleName,
-		Start:     engine.Start,
-		Shutdown:  engine.Shutdown,
+		Cmd:         Cmd(),
+		Configure:   engine.Configure,
+		Config:      &engine.Config,
+		ConfigKey:   "network",
+		Diagnostics: engine.Diagnostics,
+		FlagSet:     flagSet(),
+		Name:        pkg.ModuleName,
+		Start:       engine.Start,
+		Shutdown:    engine.Shutdown,
 	}
 }
 
@@ -50,7 +55,7 @@ func flagSet() *pflag.FlagSet {
 	return flagSet
 }
 
-func cmd() *cobra.Command {
+func Cmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "network",
 		Short: "network commands",
@@ -69,15 +74,31 @@ func cmd() *cobra.Command {
 		Short: "Run standalone api server",
 		Run: func(cmd *cobra.Command, args []string) {
 			// TODO
-			c := make(chan bool, 1)
-			<-c
+			echo := echo.New()
+			echo.HideBanner = true
+			echo.Use(middleware.Logger())
+			core.NewStatusEngine().Routes(echo)
+
+			// todo move to nuts-go-core
+			sigc := make(chan os.Signal, 1)
+			signal.Notify(sigc, os.Interrupt, os.Kill)
+
+			recoverFromEcho := func() {
+				defer func() {
+					recover()
+				}()
+				echo.Start(core.NutsConfig().ServerAddress())
+			}
+
+			go recoverFromEcho()
+			<-sigc
 		},
 	})
 
 	cmd.AddCommand(&cobra.Command{
-		Use: "add",
+		Use:   "add",
 		Short: "Add a document to the network",
-		Args: cobra.ExactArgs(1),
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return pkg.NetworkInstance().AddDocument([]byte(args[0]))
 		},

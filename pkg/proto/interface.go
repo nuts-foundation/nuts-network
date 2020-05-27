@@ -2,6 +2,7 @@ package proto
 
 import (
 	"errors"
+	core "github.com/nuts-foundation/nuts-go-core"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/pkg/p2p"
 	"time"
@@ -23,6 +24,8 @@ type Protocol interface {
 
 	AdvertConsistencyHash(hash model.Hash)
 	QueryHashList(peer model.PeerID) error
+
+	Diagnostics() []core.DiagnosticResult
 }
 
 // PeerHashQueue is a queue which contains the hashes adverted by our peers. It's a FILO queue, since
