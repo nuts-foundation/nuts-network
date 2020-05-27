@@ -236,10 +236,10 @@ func (n *p2pNetwork) connectToRemoteNodes() {
 
 // isConnectedTo checks whether we're currently connected to the given node.
 func (n p2pNetwork) isConnectedTo(nodeInfo model.NodeInfo) bool {
-	log.Log().Infof("Might connect to remote node %s, own address: %s, current peers: %v", nodeInfo, n.publicAddr, n.peersByAddr)
+	log.Log().Debugf("Might connect to remote node %s, own address: %s, current peers: %v", nodeInfo, n.publicAddr, n.peersByAddr)
 	if nodeInfo.Address == n.publicAddr {
 		// We're not going to connect to our own node
-		log.Log().Info("Not connecting since it's localhost")
+		log.Log().Debug("Not connecting since it's localhost")
 		return true
 	}
 	// Check connected to node ID?
@@ -247,14 +247,14 @@ func (n p2pNetwork) isConnectedTo(nodeInfo model.NodeInfo) bool {
 		for _, peer := range n.peers {
 			if peer.nodeId == nodeInfo.ID {
 				// We're not going to connect to a node we're already connected to
-				log.Log().Infof("Not connecting since we're already connected (nodeID=%s)", nodeInfo.ID)
+				log.Log().Debugf("Not connecting since we're already connected (nodeID=%s)", nodeInfo.ID)
 				return true
 			}
 		}
 	}
 	if n.isConnectedToAddress(nodeInfo.Address) {
 		// We're not going to connect to a node we're already connected to
-		log.Log().Infof("Not connecting since we're already connected (address=%s)", nodeInfo.Address)
+		log.Log().Debugf("Not connecting since we're already connected (address=%s)", nodeInfo.Address)
 		return true
 	}
 	return false

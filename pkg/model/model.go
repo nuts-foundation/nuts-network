@@ -74,6 +74,7 @@ type Document struct {
 }
 
 func (d Document) Hash() Hash {
+	// TODO: Document this
 	input := map[string]interface{}{
 		"contents": d.Contents,
 		"type": d.Type,

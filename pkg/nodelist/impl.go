@@ -42,7 +42,7 @@ func (n *nodeList) consumeNodeInfo(queue documentlog.DocumentQueue) {
 			log.Log().Errorf("Can't parse node info from document (hash=%s)", document.Hash())
 			continue
 		}
-		log.Log().Infof("Parsed node info (ID=%s,Addr=%s)", nodeInfo.ID, nodeInfo.Address)
+		log.Log().Tracef("Parsed node info (ID=%s,Addr=%s)", nodeInfo.ID, nodeInfo.Address)
 		n.p2pNetwork.AddRemoteNode(nodeInfo)
 	}
 }
