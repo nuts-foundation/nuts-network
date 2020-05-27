@@ -47,6 +47,7 @@ type NetworkConfig struct {
 	// Public address of this nodes other nodes can use to connect to this node.
 	PublicAddr     string
 	BootstrapNodes string
+	NodeID         string
 }
 
 func (c NetworkConfig) ParseBootstrapNodes() []string {
@@ -108,9 +109,13 @@ func (n *Network) Configure() error {
 // Start initiates the network subsystem
 func (n *Network) Start() error {
 	networkConfig := p2p.P2PNetworkConfig{
-		NodeID:        model.NodeID(core.NutsConfig().Identity()), // TODO: Is this right?
 		ListenAddress: n.Config.GrpcAddr,
 		PublicAddress: n.Config.PublicAddr,
+	}
+	if n.Config.NodeID != "" {
+		networkConfig.NodeID = model.NodeID(n.Config.NodeID)
+	} else {
+		networkConfig.NodeID = model.NodeID(core.NutsConfig().Identity())
 	}
 	if err := n.p2pNetwork.Start(networkConfig); err != nil {
 		return err

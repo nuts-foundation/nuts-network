@@ -38,6 +38,18 @@ To generate the Go server and client code, run the following command:
 
     protoc -I network network/network.proto --go_out=plugins=grpc,paths=source_relative:network
 
+Running in Docker
+*****************
+
+Since nuts-network forms a p2p network it's useful to be able to quickly spawn a lot of nodes. The easiest way to do so it using the provided docker-compose file:
+
+`docker-compose up`
+
+It now should start a bootstrap node and a single (non-bootstrap) node.
+
+To expand the network, add a few nodes:
+
+`docker-compose up -d --scale node=5`
 
 README
 ******

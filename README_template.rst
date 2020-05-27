@@ -1,7 +1,7 @@
-nuts-registry
+nuts-network
 #############
 
-Distributed registry for storing and querying health care providers their vendors and technical endpoints.
+P2P network serving as a base layer for sharing data between Nuts nodes.
 
 .. image:: https://circleci.com/gh/nuts-foundation/nuts-network.svg?style=svg
     :target: https://circleci.com/gh/nuts-foundation/nuts-network

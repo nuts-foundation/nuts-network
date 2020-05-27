@@ -38,8 +38,10 @@ type p2pNetwork struct {
 }
 
 func (n p2pNetwork) Diagnostics() []core.DiagnosticResult {
+	peers := n.Peers()
 	return []core.DiagnosticResult{
-		PeersDiagnosticsResult{Peers: n.Peers()},
+		NumberOfDiagnosticsResult{NumberOfPeers: len(peers)},
+		PeersDiagnosticsResult{Peers: peers},
 	}
 }
 

@@ -21,15 +21,8 @@ package main
 
 import (
 	"github.com/nuts-foundation/nuts-network/cmd"
-	"os"
-	"strings"
 )
 
 func main() {
-	e := "NUTS_IDENTITY=urn:oid:1.3.6.1.4.1.54851.4:00000003 NUTS_ADDRESS=localhost:1324 NUTS_PUBLICADDR=localhost:5553 NUTS_GRPCADDR=:5553 NUTS_BOOTSTRAPNODES=localhost:5555"
-	for _, keyValue := range strings.Split(e, " ") {
-		parts := strings.Split(keyValue, "=")
-		os.Setenv(parts[0], parts[1])
-	}
 	cmd.Execute()
 }
