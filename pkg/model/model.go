@@ -38,7 +38,6 @@ func (h Hash) Clone() Hash {
 	return clone
 }
 
-// TODO: Unused?
 func (h Hash) Equals(other Hash) bool {
 	return bytes.Compare(h, other) == 0
 }
@@ -47,11 +46,13 @@ func (h Hash) String() string {
 	return hex.EncodeToString(h)
 }
 
-func MakeConsistencyHash(target Hash, h1 Hash, h2 Hash) {
+func MakeConsistencyHash(h1 Hash, h2 Hash) Hash {
+	target := EmptyHash()
 	// TODO: This a naive, relatively slow to XOR 2 byte slices. There's a faster way: https://github.com/lukechampine/fastxor/blob/master/xor.go
 	for i, _ := range h1 {
 		target[i] = h1[i] ^ h2[i]
 	}
+	return target
 }
 
 type NodeID string

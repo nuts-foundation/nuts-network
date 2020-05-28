@@ -3,6 +3,7 @@ package documentlog
 import (
 	"github.com/nuts-foundation/nuts-go-core"
 	log "github.com/nuts-foundation/nuts-network/logging"
+	"github.com/nuts-foundation/nuts-network/pkg/concurrency"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/pkg/proto"
 	"sort"
@@ -17,12 +18,13 @@ func NewDocumentLog(protocol proto.Protocol) DocumentLog {
 		lastConsistencyHash: model.EmptyHash(),
 		documentHashes:      make([]model.DocumentHash, 0),
 		documentHashIndex:   make(map[string]*entry, 0),
+		documentsMutex:      &concurrency.SaferRWMutex{},
 		subscriptions:       make([]documentQueue, 0),
+		subscriptionsMutex:  &concurrency.SaferRWMutex{},
 	}
 }
 
 type entry struct {
-	// TODO: Cache consistency hash?
 	// hash contains the document hash
 	hash      model.Hash
 	timestamp time.Time
@@ -30,33 +32,35 @@ type entry struct {
 	doc *model.Document
 }
 
+// documentLog is thread-safe when callers use the DocumentLog interface
 type documentLog struct {
 	protocol proto.Protocol
 	// entries contains the list of entries in the document log
-	entries []entry
+	entries []*entry
 	// documentHashIndex contains the entries indexed by document hash
 	documentHashIndex map[string]*entry
 	// documentHashes contains the list of all document hashes
 	documentHashes []model.DocumentHash
 	// consistencyHashIndex contains the entries indexed by consistency hash
 	consistencyHashIndex map[string]*entry
+	documentsMutex       *concurrency.SaferRWMutex
 	lastConsistencyHash  model.Hash
 	advertHashTimer      *time.Ticker
 	subscriptions        []documentQueue
+	subscriptionsMutex   *concurrency.SaferRWMutex
 	publicAddr           string
+
+	// keep diagnostic state separate from source data (share-nothing) to avoid concurrent access
+	logSizeDiagnostic             LogSizeDiagnostic
+	numberOfDocumentsDiagnostic   NumberOfDocumentsDiagnostic
+	lastConsistencyHashDiagnostic LastConsistencyHashDiagnostic
 }
 
 func (dl *documentLog) Diagnostics() []core.DiagnosticResult {
-	var sizeInBytes int
-	for _, entry := range dl.entries {
-		if entry.doc != nil {
-			sizeInBytes += len(entry.doc.Contents)
-		}
-	}
 	return []core.DiagnosticResult{
-		LastConsistencyHashDiagnostic{Hash: dl.lastConsistencyHash},
-		NumberOfDocumentsDiagnostic{NumberOfDocuments: len(dl.entries)},
-		LogSizeDiagnostic{SizeInBytes: sizeInBytes},
+		dl.lastConsistencyHashDiagnostic,
+		dl.numberOfDocumentsDiagnostic,
+		dl.logSizeDiagnostic,
 	}
 }
 
@@ -64,93 +68,103 @@ func (dl *documentLog) Configure(publicAddr string) {
 	dl.publicAddr = publicAddr
 }
 
-type documentQueue struct {
-	documentType string
-	c            chan *model.Document
-}
-
-func (q documentQueue) Get() *model.Document {
-	return <-q.c
-}
-
 func (dl *documentLog) Subscribe(documentType string) DocumentQueue {
-	// TODO: Syncrhonize
 	queue := documentQueue{
 		documentType: documentType,
 		c:            make(chan *model.Document, 100), // TODO: Does this number make sense?
 	}
-	dl.subscriptions = append(dl.subscriptions, queue)
+	dl.subscriptionsMutex.WriteLock(func() {
+		dl.subscriptions = append(dl.subscriptions, queue)
+	})
 	return &queue
 }
 
-func (dl documentLog) GetDocument(hash model.Hash) *model.Document {
-	entry := dl.documentHashIndex[hash.String()]
-	if entry == nil {
-		return nil
+func (dl documentLog) GetDocument(hash model.Hash) model.Document {
+	var entry *entry
+	dl.documentsMutex.ReadLock(func() {
+		entry = dl.documentHashIndex[hash.String()]
+	})
+	if entry == nil || entry.doc == nil {
+		return model.Document{}
 	}
-	return entry.doc
+	return *entry.doc
 }
 
 func (dl *documentLog) HasDocument(hash model.Hash) bool {
-	return dl.documentHashIndex[hash.String()].doc != nil
+	var result bool
+	dl.documentsMutex.ReadLock(func() {
+		result = dl.documentHashIndex[hash.String()].doc != nil
+	})
+	return result
 }
 
 func (dl *documentLog) AddDocumentHash(hash model.Hash, timestamp time.Time) {
-	if dl.documentHashIndex[hash.String()] != nil {
-		// Hash already present, but check if the timestamp matches, just to be sure
-		t := dl.documentHashIndex[hash.String()].timestamp.UnixNano()
-		if t != timestamp.UnixNano() {
-			log.Log().Warnf("Integrity violation! Hash %s with timestamp %d is already present with different timestamp (%d)", hash, timestamp.UnixNano(), hash)
+	dl.documentsMutex.WriteLock(func() {
+		if dl.documentHashIndex[hash.String()] != nil {
+			// Hash already present, but check if the timestamp matches, just to be sure
+			t := dl.documentHashIndex[hash.String()].timestamp.UnixNano()
+			if t != timestamp.UnixNano() {
+				log.Log().Warnf("Integrity violation! Document hash %s with timestamp %d is already present with different timestamp (%d)", hash, timestamp.UnixNano(), hash)
+			}
+			return
 		}
-		return
-	}
-	newEntry := entry{
-		hash:      hash,
-		timestamp: timestamp,
-	}
-	dl.entries = append(dl.entries, newEntry)
-	dl.documentHashIndex[newEntry.hash.String()] = &newEntry
-	// TODO: Isn't there a faster way to keep it sorted (or not sort it at all?)
-	// TODO: Synchronization!
-	sort.Slice(dl.entries, func(i, j int) bool {
-		return dl.entries[i].timestamp.Before(dl.entries[j].timestamp)
+		newEntry := &entry{
+			hash:      hash,
+			timestamp: timestamp,
+		}
+		dl.numberOfDocumentsDiagnostic.NumberOfDocuments++
+		dl.entries = append(dl.entries, newEntry)
+		dl.documentHashIndex[newEntry.hash.String()] = newEntry
+		// TODO: Isn't there a faster way to keep it sorted (or not sort it at all?)
+		// TODO: What if entries have the same timestamp? Use hash for ordering
+		sort.Slice(dl.entries, func(i, j int) bool {
+			return dl.entries[i].timestamp.Before(dl.entries[j].timestamp)
+		})
+		// Calc last consistency hash
+		// TODO: Test this
+		// TODO: Make this smarter (retain unchanged consistency hashes)
+		dl.consistencyHashIndex = make(map[string]*entry, len(dl.entries))
+		documentHashes := make([]model.DocumentHash, len(dl.entries))
+		var i = 0
+		prevHash := model.EmptyHash()
+		for i = 0; i < len(dl.entries); i++ {
+			documentHashes[i] = model.DocumentHash{
+				Hash:      dl.entries[i].hash,
+				Timestamp: dl.entries[i].timestamp,
+			}
+			if i == 0 {
+				copy(prevHash, dl.entries[i].hash)
+			} else {
+				prevHash = model.MakeConsistencyHash(prevHash, dl.entries[i].hash)
+			}
+			dl.consistencyHashIndex[prevHash.String()] = dl.entries[i]
+		}
+		dl.lastConsistencyHash = prevHash
+		dl.documentHashes = documentHashes
 	})
-	// Calc last consistency hash
-	// TODO: Test this
-	// TODO: Make this smarter (retain unchanged consistency hashes)
-	dl.consistencyHashIndex = make(map[string]*entry, len(dl.entries))
-	documentHashes := make([]model.DocumentHash, len(dl.entries))
-	var i = 0
-	prevHash := model.EmptyHash()
-	for i = 0; i < len(dl.entries); i++ {
-		documentHashes[i] = model.DocumentHash{
-			Hash:      dl.entries[i].hash,
-			Timestamp: dl.entries[i].timestamp,
-		}
-		if i == 0 {
-			copy(prevHash, dl.entries[i].hash)
-		} else {
-			model.MakeConsistencyHash(prevHash, prevHash, dl.entries[i].hash)
-		}
-		dl.consistencyHashIndex[prevHash.String()] = &dl.entries[i]
-	}
-	dl.lastConsistencyHash = prevHash
-	dl.documentHashes = documentHashes
 }
 
 func (dl *documentLog) AddDocument(document *model.Document) {
 	dl.AddDocumentHash(document.Hash(), document.Timestamp)
 
-	entry := dl.documentHashIndex[document.Hash().String()]
-	if entry.doc == nil {
-		entry.doc = document
-		// TODO: Synchronization
-		for _, sub := range dl.subscriptions {
-			if sub.documentType == document.Type {
-				sub.c <- document
+	dl.documentsMutex.WriteLock(func() {
+		entry := dl.documentHashIndex[document.Hash().String()]
+		if entry.doc == nil {
+			if !entry.hash.Equals(document.Hash()) {
+				log.Log().Warnf("Document rejected, actual hash differs from expected (expected=%s,actual=%s)", entry.hash, document.Hash())
+				return
 			}
+			entry.doc = document
+			dl.logSizeDiagnostic.SizeInBytes += len(entry.doc.Contents)
+			dl.subscriptionsMutex.ReadLock(func() {
+				for _, sub := range dl.subscriptions {
+					if sub.documentType == document.Type {
+						sub.c <- document
+					}
+				}
+			})
 		}
-	}
+	})
 }
 
 func (dl *documentLog) DocumentHashes() []model.DocumentHash {
@@ -176,7 +190,11 @@ func (dl *documentLog) resolveAdvertedHashes() {
 	for {
 		peerHash := queue.Get()
 		log.Log().Debugf("Got consistency hash (ours: %s, received: %s)", dl.lastConsistencyHash.String(), peerHash.Hash.String())
-		if dl.consistencyHashIndex[peerHash.Hash.String()] == nil {
+		var entry *entry
+		dl.documentsMutex.ReadLock(func() {
+			entry = dl.consistencyHashIndex[peerHash.Hash.String()]
+		})
+		if entry == nil {
 			log.Log().Debugf("Received unknown consistency hash, will query for document hash list (peer=%s,hash=%s)", peerHash.Peer, peerHash.Hash)
 			// TODO: Don't have multiple parallel queries for the same peer / hash
 			if err := dl.protocol.QueryHashList(peerHash.Peer); err != nil {

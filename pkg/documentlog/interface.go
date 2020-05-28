@@ -19,3 +19,12 @@ type DocumentLog interface {
 type DocumentQueue interface {
 	Get() *model.Document
 }
+
+type documentQueue struct {
+	documentType string
+	c            chan *model.Document
+}
+
+func (q documentQueue) Get() *model.Document {
+	return <-q.c
+}

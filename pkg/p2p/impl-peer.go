@@ -9,6 +9,10 @@ import (
 	"io"
 )
 
+type messageGate interface {
+	Send(message *network.NetworkMessage) error
+	Recv() (*network.NetworkMessage, error)
+}
 
 // Peer represents a connected peer
 type peer struct {
@@ -32,6 +36,12 @@ func (p peer) String() string {
 }
 
 func (p *peer) close() {
+	if p.conn != nil {
+		if err := p.conn.Close(); err != nil {
+			log.Log().Errorf("Unable to close client connection (peer=%s): %v", p, err)
+		}
+		p.conn = nil
+	}
 	close(p.outMessages)
 }
 

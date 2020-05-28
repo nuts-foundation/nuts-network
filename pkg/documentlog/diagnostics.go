@@ -2,11 +2,10 @@ package documentlog
 
 import (
 	"fmt"
-	"github.com/nuts-foundation/nuts-network/pkg/model"
 )
 
 type LastConsistencyHashDiagnostic struct {
-	Hash model.Hash
+	Hash string
 }
 
 func (d LastConsistencyHashDiagnostic) Name() string {
@@ -14,7 +13,7 @@ func (d LastConsistencyHashDiagnostic) Name() string {
 }
 
 func (d LastConsistencyHashDiagnostic) String() string {
-	return d.Hash.String()
+	return d.Hash
 }
 
 type NumberOfDocumentsDiagnostic struct {
@@ -34,7 +33,7 @@ type LogSizeDiagnostic struct {
 }
 
 func (d LogSizeDiagnostic) Name() string {
-	return "[DocumentLog] Stored document size"
+	return "[DocumentLog] Stored document size (bytes)"
 }
 
 func (d LogSizeDiagnostic) String() string {

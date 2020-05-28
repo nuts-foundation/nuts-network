@@ -4,11 +4,13 @@ import (
 	core "github.com/nuts-foundation/nuts-go-core"
 	log "github.com/nuts-foundation/nuts-network/logging"
 	"github.com/nuts-foundation/nuts-network/network"
+	"github.com/nuts-foundation/nuts-network/pkg/concurrency"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/pkg/p2p"
 	"time"
 )
 
+// protocol is thread-safe when callers use the Protocol interface
 type protocol struct {
 	p2pNetwork p2p.P2PNetwork
 	hashSource HashSource
@@ -16,14 +18,18 @@ type protocol struct {
 	receivedConsistencyHashes *AdvertedHashQueue
 	receivedDocumentHashes    *AdvertedHashQueue
 	peerHashes                map[model.PeerID]model.Hash
+	// peerHashesMutex protects concurrent access to peerHashes
+	peerHashesMutex *concurrency.SaferRWMutex
 }
 
 func (p *protocol) Diagnostics() []core.DiagnosticResult {
 	// Return map copy so callers can't mess up our internal state
 	h := make(map[model.PeerID]model.Hash)
-	for peer, hash := range p.peerHashes {
-		h[peer] = hash
-	}
+	p.peerHashesMutex.ReadLock(func() {
+		for peer, hash := range p.peerHashes {
+			h[peer] = hash
+		}
+})
 	return []core.DiagnosticResult{
 		peerConsistencyHashDiagnostic{h},
 	}
@@ -37,6 +43,8 @@ func NewProtocol() Protocol {
 		receivedDocumentHashes: &AdvertedHashQueue{
 			c: make(chan PeerHash, 1000), // TODO: Does this number make sense?
 		},
+		peerHashes:      make(map[model.PeerID]model.Hash),
+		peerHashesMutex: &concurrency.SaferRWMutex{},
 	}
 }
 
@@ -89,16 +97,18 @@ func (p protocol) consumeMessages() {
 	}
 }
 
-func (p protocol) handleMessage(peerMsg p2p.PeerMessage) error {
-	// TODO: Everything works synchronous here, we might want to introduce some asynchronicity to avoid waiting on each other over the network
+func (p *protocol) handleMessage(peerMsg p2p.PeerMessage) error {
 	peer := peerMsg.Peer
 	msg := peerMsg.Message
 	if msg.AdvertHash != nil {
 		log.Log().Debugf("Received adverted hash from peer: %s", peer)
-		p.receivedConsistencyHashes.put(PeerHash{
+		p.peerHashesMutex.WriteLock(func() {
+			p.peerHashes[peer] = msg.AdvertHash.Hash
+		})
+		p.receivedConsistencyHashes.c <- PeerHash{
 			Peer: peer,
 			Hash: msg.AdvertHash.Hash,
-		})
+		}
 	}
 	if msg.HashListQuery != nil {
 		log.Log().Debugf("Received hash list query from peer, responding with consistency hash list (peer=%s)", peer)
@@ -134,8 +144,9 @@ func (p protocol) handleMessage(peerMsg p2p.PeerMessage) error {
 	if msg.DocumentQuery != nil && msg.DocumentQuery.Hash != nil {
 		hash := model.Hash(msg.DocumentQuery.Hash)
 		log.Log().Debugf("Received document query from peer (peer=%s, hash=%s)", peer, hash)
+		// TODO: Maybe this should be asynchronous since loading document contents might be I/O heavy?
 		document := p.hashSource.GetDocument(hash)
-		if document == nil {
+		if document.Contents == nil {
 			log.Log().Warnf("Peer queried us for a document, but we don't appear to have it (peer=%s,document=%s)", peer, hash)
 			return nil
 		}
@@ -151,6 +162,7 @@ func (p protocol) handleMessage(peerMsg p2p.PeerMessage) error {
 	}
 	if msg.Document != nil && msg.Document.Contents != nil {
 		log.Log().Infof("Received document from peer (peer=%s,time=%d,type=%s)", peer, msg.Document.Time, msg.Document.Type)
+		// TODO: Maybe this should be asynchronous since writing the document contents might be I/O heavy?
 		p.hashSource.AddDocument(&model.Document{
 			Contents:  msg.Document.Contents,
 			Timestamp: time.Unix(0, msg.Document.Time),

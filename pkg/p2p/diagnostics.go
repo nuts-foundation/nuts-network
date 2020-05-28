@@ -31,7 +31,7 @@ func (p PeersDiagnosticsResult) String() string {
 	for i, peer := range p.Peers {
 		addrs[i] = peer.String()
 	}
-	// Sort to make sure the order is stable.
+	// Sort for stable order (easier for humans to understand)
 	sort.Slice(addrs, func(i, j int) bool {
 		return addrs[i] > addrs[j]
 	})

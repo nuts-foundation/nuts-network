@@ -45,7 +45,7 @@ type HashSource interface {
 	DocumentHashes() []model.DocumentHash
 	// HasDocument tests whether the document is present for the given hash
 	HasDocument(hash model.Hash) bool
-	GetDocument(hash model.Hash) *model.Document
+	GetDocument(hash model.Hash) model.Document
 	AddDocument(document *model.Document)
 	AddDocumentHash(hash model.Hash, timestamp time.Time)
 }
@@ -56,7 +56,4 @@ type AdvertedHashQueue struct {
 
 func (q AdvertedHashQueue) Get() PeerHash {
 	return <-q.c
-}
-func (q AdvertedHashQueue) put(hash PeerHash) {
-	q.c <- hash
 }
