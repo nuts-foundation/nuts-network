@@ -29,7 +29,7 @@ func (p *protocol) Diagnostics() []core.DiagnosticResult {
 		for peer, hash := range p.peerHashes {
 			h[peer] = hash
 		}
-})
+	})
 	return []core.DiagnosticResult{
 		peerConsistencyHashDiagnostic{h},
 	}
@@ -52,6 +52,7 @@ func (p *protocol) Start(p2pNetwork p2p.P2PNetwork, hashSource HashSource) {
 	p.p2pNetwork = p2pNetwork
 	p.hashSource = hashSource
 	go p.consumeMessages()
+	go p.updateDiagnostics()
 }
 
 func (p protocol) Stop() {
@@ -76,6 +77,29 @@ func (p protocol) QueryHashList(peer model.PeerID) error {
 	msg := createMessage()
 	msg.HashListQuery = &network.HashListQuery{}
 	return p.p2pNetwork.Send(peer, &msg)
+}
+
+func (p *protocol) updateDiagnostics() {
+	// TODO: When to exit the loop?
+	ticker := time.NewTicker(2 * time.Second)
+	for {
+		<-ticker.C
+		// TODO: Make this garbage collection less dumb. Maybe we should be notified of disconnects rather than looping each time
+		p.peerHashesMutex.WriteLock(func() {
+			connectedPeers := p.p2pNetwork.Peers()
+			for peerId, _ := range p.peerHashes {
+				var present = false
+				for _, connectedPeer := range connectedPeers {
+					if peerId == connectedPeer.PeerID {
+						present = true
+					}
+				}
+				if !present {
+					delete(p.peerHashes, peerId)
+				}
+			}
+		})
+	}
 }
 
 func (p protocol) consumeMessages() {

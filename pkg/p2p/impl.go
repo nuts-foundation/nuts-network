@@ -50,7 +50,7 @@ func (n *p2pNetwork) Peers() []Peer {
 	n.peerMutex.ReadLock(func() {
 		for _, peer := range n.peers {
 			result = append(result, Peer{
-				NodeID:  peer.nodeId,
+				NodeID:  peer.nodeID,
 				PeerID:  peer.id,
 				Address: peer.addr,
 			})
@@ -178,7 +178,7 @@ func (n *p2pNetwork) connectToNode(nodeInfo *model.NodeInfo) error {
 	}
 	peer := &peer{
 		id:     model.GetPeerID(nodeInfo.Address),
-		nodeId: nodeInfo.ID,
+		nodeID: nodeInfo.ID,
 		conn:   conn,
 		client: client,
 		gate:   gate,
@@ -250,7 +250,7 @@ func (n p2pNetwork) shouldConnectTo(nodeInfo model.NodeInfo) bool {
 	n.peerMutex.ReadLock(func() {
 		if nodeInfo.ID != "" {
 			for _, peer := range n.peers {
-				if peer.nodeId == nodeInfo.ID {
+				if peer.nodeID == nodeInfo.ID {
 					// We're not going to connect to a node we're already connected to
 					log.Log().Debugf("Not connecting since we're already connected (NodeID=%s)", nodeInfo.ID)
 					result = false
@@ -278,7 +278,7 @@ func (n p2pNetwork) Connect(stream network.Network_ConnectServer) error {
 	if !ok {
 		return errors.New("unable to get metadata")
 	}
-	nodeId, err := nodeIdFromMetadata(md)
+	nodeID, err := nodeIDFromMetadata(md)
 	if err != nil {
 		return err
 	}
@@ -289,7 +289,7 @@ func (n p2pNetwork) Connect(stream network.Network_ConnectServer) error {
 	peer := &peer{
 		// TODO
 		id:     model.GetPeerID(peerCtx.Addr.String()),
-		nodeId: nodeId,
+		nodeID: nodeID,
 		gate:   stream,
 		addr:   peerCtx.Addr.String(),
 	}

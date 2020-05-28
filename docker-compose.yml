@@ -5,9 +5,7 @@ services:
     environment:
       NUTS_ADDRESS: 0.0.0.0:1323
       NUTS_IDENTITY: urn:oid:1.3.6.1.4.1.54851.4:00000001
-      NUTS_NODEID: bootstrap
-      NUTS_PUBLICADDR: bootstrap:5555
-    command: ["/bin/sh", "-c", "/usr/bin/nuts-network server --publicAddr=bootstrap:5555 --nodeId=bootstrap"]
+    command: ["/bin/sh", "-c", "/usr/bin/nuts-network server --publicAddr=bootstrap:5555 --nodeID=bootstrap"]
     networks:
       - nuts
     ports:

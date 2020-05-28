@@ -17,7 +17,7 @@ type messageGate interface {
 // Peer represents a connected peer
 type peer struct {
 	id     model.PeerID
-	nodeId model.NodeID
+	nodeID model.NodeID
 	addr   string
 
 	// gate is used to send and receive messages
@@ -32,7 +32,7 @@ type peer struct {
 }
 
 func (p peer) String() string {
-	return fmt.Sprintf("%s(%s)", p.nodeId, p.addr)
+	return fmt.Sprintf("%s(%s)", p.nodeID, p.addr)
 }
 
 func (p *peer) close() {

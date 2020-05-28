@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-const NodeIDHeader = "nodeId"
+const NodeIDHeader = "nodeID"
 
 func normalizeAddress(addr string) string {
 	var normalizedAddr string
@@ -26,7 +26,7 @@ func normalizeAddress(addr string) string {
 	return normalizedAddr
 }
 
-func nodeIdFromMetadata(md metadata.MD) (model.NodeID, error) {
+func nodeIDFromMetadata(md metadata.MD) (model.NodeID, error) {
 	vals := md.Get(NodeIDHeader)
 	if len(vals) == 0 {
 		return "", fmt.Errorf("peer didn't send %s header", NodeIDHeader)
@@ -36,6 +36,6 @@ func nodeIdFromMetadata(md metadata.MD) (model.NodeID, error) {
 	return model.NodeID(strings.TrimSpace(vals[0])), nil
 }
 
-func constructMetadata(nodeId model.NodeID) metadata.MD {
-	return metadata.New(map[string]string{NodeIDHeader: string(nodeId)})
+func constructMetadata(nodeID model.NodeID) metadata.MD {
+	return metadata.New(map[string]string{NodeIDHeader: string(nodeID)})
 }

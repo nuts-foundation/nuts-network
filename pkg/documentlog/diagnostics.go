@@ -2,6 +2,7 @@ package documentlog
 
 import (
 	"fmt"
+	"strings"
 )
 
 type LastConsistencyHashDiagnostic struct {
@@ -14,6 +15,22 @@ func (d LastConsistencyHashDiagnostic) Name() string {
 
 func (d LastConsistencyHashDiagnostic) String() string {
 	return d.Hash
+}
+
+type ConsistencyHashListDiagnostic struct {
+	Hashes []string
+}
+
+func (d ConsistencyHashListDiagnostic) Name() string {
+	return "[DocumentLog] Ordered consistency hash list"
+}
+
+func (d ConsistencyHashListDiagnostic) String() string {
+	var result = make([]string, len(d.Hashes))
+	for i, hash := range d.Hashes {
+		result[i] = fmt.Sprintf("%d->%s", i, hash)
+	}
+	return strings.Join(result, " ")
 }
 
 type NumberOfDocumentsDiagnostic struct {

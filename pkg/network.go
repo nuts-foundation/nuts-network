@@ -28,7 +28,6 @@ import (
 	"github.com/nuts-foundation/nuts-network/pkg/nodelist"
 	"github.com/nuts-foundation/nuts-network/pkg/p2p"
 	"github.com/nuts-foundation/nuts-network/pkg/proto"
-	"github.com/spf13/cobra"
 	"strings"
 	"sync"
 	"time"
@@ -89,13 +88,11 @@ func NetworkInstance() *Network {
 	return instance
 }
 
-// Configure initializes the db, but only when in server mode
+// Configure configures the network subsystem
 func (n *Network) Configure() error {
 	var err error
-
 	n.configOnce.Do(func() {
 		// TODO: Why isn't this in core?
-		core.NutsConfig().Load(&cobra.Command{})
 		if core.NutsConfig().Identity() == "" {
 			err = errors.New("nuts identity not configured")
 			return

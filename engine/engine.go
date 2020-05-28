@@ -52,7 +52,7 @@ func flagSet() *pflag.FlagSet {
 	flagSet.String("grpcAddr", ":5555", "gRPC address to listen on")
 	flagSet.String("publicAddr", "", "Public address other nodes can connect to. If empty, the node will not be registered on the nodelist.")
 	flagSet.String("bootstrapNodes", "", "Space-separated list of bootstrap node addresses")
-	flagSet.String("nodeId", "", "ID of this node. If not set, the node's identity will be used.")
+	flagSet.String("nodeID", "", "ID of this node. If not set, the node's identity will be used.")
 	return flagSet
 }
 

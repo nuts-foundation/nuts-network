@@ -54,11 +54,13 @@ type documentLog struct {
 	logSizeDiagnostic             LogSizeDiagnostic
 	numberOfDocumentsDiagnostic   NumberOfDocumentsDiagnostic
 	lastConsistencyHashDiagnostic LastConsistencyHashDiagnostic
+	consistencyHashListDiagnostic ConsistencyHashListDiagnostic
 }
 
 func (dl *documentLog) Diagnostics() []core.DiagnosticResult {
 	return []core.DiagnosticResult{
 		dl.lastConsistencyHashDiagnostic,
+		dl.consistencyHashListDiagnostic,
 		dl.numberOfDocumentsDiagnostic,
 		dl.logSizeDiagnostic,
 	}
@@ -127,6 +129,7 @@ func (dl *documentLog) AddDocumentHash(hash model.Hash, timestamp time.Time) {
 		documentHashes := make([]model.DocumentHash, len(dl.entries))
 		var i = 0
 		prevHash := model.EmptyHash()
+		consistencyHashes := make([]string, len(dl.entries))
 		for i = 0; i < len(dl.entries); i++ {
 			documentHashes[i] = model.DocumentHash{
 				Hash:      dl.entries[i].hash,
@@ -137,9 +140,12 @@ func (dl *documentLog) AddDocumentHash(hash model.Hash, timestamp time.Time) {
 			} else {
 				prevHash = model.MakeConsistencyHash(prevHash, dl.entries[i].hash)
 			}
+			consistencyHashes[i] = prevHash.String()
 			dl.consistencyHashIndex[prevHash.String()] = dl.entries[i]
 		}
 		dl.lastConsistencyHash = prevHash
+		dl.lastConsistencyHashDiagnostic.Hash = dl.lastConsistencyHash.String()
+		dl.consistencyHashListDiagnostic.Hashes = consistencyHashes
 		dl.documentHashes = documentHashes
 	})
 }
@@ -210,7 +216,7 @@ func (dl *documentLog) advertHash() {
 	for {
 		<-dl.advertHashTimer.C
 		if !dl.lastConsistencyHash.Empty() {
-			log.Log().Debugf("Adverting last hash (%s)", dl.lastConsistencyHash)
+			log.Log().Infof("Adverting last hash (%s)", dl.lastConsistencyHash)
 			dl.protocol.AdvertConsistencyHash(dl.lastConsistencyHash)
 		}
 	}

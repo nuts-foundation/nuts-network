@@ -34,7 +34,7 @@ type Peer struct {
 
 func (p Peer) String() string {
 	if p.NodeID != "" {
-		return fmt.Sprintf("%s(Node=%s)", p.Address, p.NodeID)
+		return fmt.Sprintf("(ID=%s,NodeID=%s,Addr=%s)", p.PeerID, p.NodeID, p.Address)
 	}
 	return p.Address
 }

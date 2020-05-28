@@ -25,36 +25,34 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var e = engine.NewNetworkEngine()
-var rootCmd = e.Cmd
-
 func Execute() {
-	c := cfg.NewNutsGlobalConfig()
-	c.IgnoredPrefixes = append(c.IgnoredPrefixes, e.ConfigKey)
-	c.RegisterFlags(rootCmd, e)
-	if err := c.Load(rootCmd); err != nil {
+	var engineInstance = engine.NewNetworkEngine()
+	globalConfig := cfg.NutsConfig()
+	globalConfig.IgnoredPrefixes = append(globalConfig.IgnoredPrefixes, engineInstance.ConfigKey)
+	globalConfig.RegisterFlags(engineInstance.Cmd, engineInstance)
+	if err := globalConfig.Load(engineInstance.Cmd); err != nil {
 		panic(err)
 	}
 
-	cfg.RegisterEngine(e)
-	c.PrintConfig(logrus.StandardLogger())
+	cfg.RegisterEngine(engineInstance)
+	globalConfig.PrintConfig(logrus.StandardLogger())
 
-	if err := c.InjectIntoEngine(e); err != nil {
+	if err := globalConfig.InjectIntoEngine(engineInstance); err != nil {
 		panic(err)
 	}
 
-	if err := e.Configure(); err != nil {
+	if err := engineInstance.Configure(); err != nil {
 		panic(err)
 	}
 
-	if err := e.Start(); err != nil {
+	if err := engineInstance.Start(); err != nil {
 		panic(err)
 	}
 
-	defer e.Shutdown()
+	defer engineInstance.Shutdown()
 
-	rootCmd.SetArgs([]string{"server"})
-	rootCmd.Execute()
+	engineInstance.Cmd.SetArgs([]string{"server"})
+	engineInstance.Cmd.Execute()
 
 	println("EXIT")
 }

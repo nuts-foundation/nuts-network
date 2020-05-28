@@ -17,14 +17,14 @@ type nodeList struct {
 	publicAddr            string
 }
 
-func (n *nodeList) Start(nodeId model.NodeID, publicAddr string) {
+func (n *nodeList) Start(nodeID model.NodeID, publicAddr string) {
 	// TODO: Test if already registered by examining local copy to avoid creating waste (duplicate documents) on the network.
 	//  If not in the local copy, we should not autoregister our node but this should be done via a command.
 	//  This process can be made easier by registering our node info when `registry register-vendor` is executed.
 	if publicAddr != "" {
 		n.publicAddr = publicAddr
-		log.Log().Infof("Registering local node on nodelist (id=%s,addr=%s)", nodeId, publicAddr)
-		data, _ := json.Marshal(model.NodeInfo{ID: nodeId, Address: publicAddr})
+		log.Log().Infof("Registering local node on nodelist (id=%s,addr=%s)", nodeID, publicAddr)
+		data, _ := json.Marshal(model.NodeInfo{ID: nodeID, Address: publicAddr})
 		n.documents.AddDocument(&model.Document{Timestamp: time.Now(), Contents: data, Type: nodeInfoDocumentType})
 	}
 	documentQueue := n.documents.Subscribe(nodeInfoDocumentType)
