@@ -85,7 +85,33 @@ func (n p2pNetwork) Send(peerId model.PeerID, message *network.NetworkMessage) e
 
 type remoteNode struct {
 	model.NodeInfo
-	connecting bool
+	tryConnectTimer *time.Timer
+}
+
+func (r *remoteNode) connect(self model.NodeID) (*peer, error) {
+	log.Log().Infof("Connecting to node: %s", r.NodeInfo)
+	// TODO: Is this the right context?
+	cxt := metadata.NewOutgoingContext(context.Background(), constructMetadata(self))
+	conn, err := grpc.DialContext(cxt, r.NodeInfo.Address, grpc.WithInsecure()) // TODO: Add TLS
+	if err != nil {
+		return nil, err
+	}
+	// TODO: What if two node propagate the same ID? Maybe we shouldn't index our peers based on NodeID?
+	client := network.NewNetworkClient(conn)
+	gate, err := client.Connect(cxt)
+	if err != nil {
+		log.Log().Errorf("Failed to set up stream (node=%s): %v", r.NodeInfo, err)
+		_ = conn.Close()
+		return nil, err
+	}
+	return &peer{
+		id:     model.GetPeerID(r.NodeInfo.Address),
+		nodeID: r.NodeInfo.ID,
+		conn:   conn,
+		client: client,
+		gate:   gate,
+		addr:   r.NodeInfo.Address,
+	}, nil
 }
 
 func NewP2PNetwork() P2PNetwork {
@@ -160,34 +186,6 @@ func (n p2pNetwork) AddRemoteNode(nodeInfo model.NodeInfo) {
 	}
 }
 
-func (n *p2pNetwork) connectToNode(nodeInfo *model.NodeInfo) error {
-	log.Log().Infof("Connecting to node: %s", nodeInfo)
-	// TODO: Is this the right context?
-	cxt := metadata.NewOutgoingContext(context.Background(), constructMetadata(n.node.ID))
-	conn, err := grpc.DialContext(cxt, nodeInfo.Address, grpc.WithInsecure()) // TODO: Add TLS
-	if err != nil {
-		return err
-	}
-	// TODO: What if two node propagate the same ID? Maybe we shouldn't index our peers based on NodeID?
-	client := network.NewNetworkClient(conn)
-	gate, err := client.Connect(cxt)
-	if err != nil {
-		log.Log().Errorf("Failed to set up stream (node=%s): %v", nodeInfo, err)
-		_ = conn.Close()
-		return err
-	}
-	peer := &peer{
-		id:     model.GetPeerID(nodeInfo.Address),
-		nodeID: nodeInfo.ID,
-		conn:   conn,
-		client: client,
-		gate:   gate,
-		addr:   nodeInfo.Address,
-	}
-	n.sendAndReceiveForPeer(peer)
-	return nil
-}
-
 func (n *p2pNetwork) sendAndReceiveForPeer(peer *peer) {
 	go peer.startSending()
 	n.addPeer(peer)
@@ -200,42 +198,33 @@ func (n *p2pNetwork) sendAndReceiveForPeer(peer *peer) {
 
 // connectToRemoteNodes reads from remoteNodeAddChannel to add remote nodes and connect to them
 func (n *p2pNetwork) connectToRemoteNodes() {
-	remoteNodesMutex := concurrency.SaferRWMutex{}
-	go func() {
-		for nodeInfo := range n.remoteNodeAddChannel {
-			remoteNodesMutex.WriteLock(func() {
-				if n.remoteNodes[nodeInfo.ID] == nil {
-					n.remoteNodes[nodeInfo.ID] = &remoteNode{
-						NodeInfo:   nodeInfo,
-						connecting: false,
-					}
-					log.Log().Infof("Added remote node: %s", nodeInfo)
-				}
-			})
-		}
-	}()
-
-	// TODO: We should probably do this per node
-	// TODO: We need a backoff strategy
-	ticker := time.NewTicker(1 * time.Second)
-	for {
-		// TODO: Exit strategy
-		<-ticker.C
-		remoteNodesMutex.ReadLock(func() {
-			for _, remoteNode := range n.remoteNodes {
-				if !remoteNode.connecting && n.shouldConnectTo(remoteNode.NodeInfo) {
-					remoteNode.connecting = true
-					go func() {
-						if err := n.connectToNode(&remoteNode.NodeInfo); err != nil {
-							log.Log().Warnf("Couldn't connect to node (node=%s): %v", remoteNode.NodeInfo, err)
-						} else {
-							log.Log().Infof("Connected to node: %s", remoteNode.NodeInfo)
-						}
-						remoteNode.connecting = false
-					}()
-				}
+	for nodeInfo := range n.remoteNodeAddChannel {
+		if n.remoteNodes[nodeInfo.ID] == nil {
+			remoteNode := &remoteNode{
+				NodeInfo: nodeInfo,
+				tryConnectTimer: time.NewTimer(0), // Start immediately for the first time
 			}
-		})
+			n.remoteNodes[nodeInfo.ID] = remoteNode
+			log.Log().Infof("Added remote node: %s", nodeInfo)
+			go func() {
+				<-remoteNode.tryConnectTimer.C
+				if n.shouldConnectTo(n.node) {
+					if peer, err := remoteNode.connect(n.node.ID); err != nil {
+						log.Log().Warnf("Couldn't connect to node (node=%s): %v", remoteNode.NodeInfo, err)
+						remoteNode.tryConnectTimer.Reset(time.Second)
+						// What about backoff?
+					} else {
+						n.sendAndReceiveForPeer(peer)
+						log.Log().Infof("Connected to node: %s", remoteNode.NodeInfo)
+						remoteNode.tryConnectTimer.Reset(10 * time.Second)
+					}
+				} else {
+					// We're already connected or we shouldn't connect to this node at all
+					// TODO: Reconnection should be smarter (and not timer-based)
+					remoteNode.tryConnectTimer.Reset(30 * time.Second)
+				}
+			}()
+		}
 	}
 }
 
@@ -297,7 +286,6 @@ func (n p2pNetwork) Connect(stream network.Network_ConnectServer) error {
 	return nil
 }
 
-
 func (n *p2pNetwork) addPeer(peer *peer) {
 	n.peerMutex.WriteLock(func() {
 		n.peers[peer.id] = peer
@@ -316,5 +304,3 @@ func (n *p2pNetwork) removePeer(peer *peer) {
 		delete(n.peersByAddr, normalizeAddress(peer.addr))
 	})
 }
-
-
