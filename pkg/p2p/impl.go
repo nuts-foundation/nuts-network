@@ -95,6 +95,7 @@ func (n p2pNetwork) ReceivedMessages() MessageQueue {
 }
 
 func (n p2pNetwork) Send(peerId model.PeerID, message *network.NetworkMessage) error {
+	// TODO: Can't we optimize this so that we don't need this lock? Maybe by (secretly) embedding a pointer to the peer in the peer ID?
 	var peer *peer
 	n.peerMutex.ReadLock(func() {
 		peer = n.peers[peerId]
