@@ -4,7 +4,6 @@ import (
 	core "github.com/nuts-foundation/nuts-go-core"
 	log "github.com/nuts-foundation/nuts-network/logging"
 	"github.com/nuts-foundation/nuts-network/network"
-	"github.com/nuts-foundation/nuts-network/pkg/concurrency"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/pkg/p2p"
 	"time"
@@ -18,20 +17,15 @@ type protocol struct {
 	receivedConsistencyHashes *AdvertedHashQueue
 	receivedDocumentHashes    *AdvertedHashQueue
 	peerHashes                map[model.PeerID]model.Hash
-	// peerHashesMutex protects concurrent access to peerHashes
-	peerHashesMutex *concurrency.SaferRWMutex
+
+	// Cache diagnostics to avoid having to lock precious resources
+	peerConsistencyHashDiagnostic peerConsistencyHashDiagnostic
+	newPeerHashChannel            chan PeerHash
 }
 
 func (p *protocol) Diagnostics() []core.DiagnosticResult {
-	// Return map copy so callers can't mess up our internal state
-	h := make(map[model.PeerID]model.Hash)
-	p.peerHashesMutex.ReadLock(func() {
-		for peer, hash := range p.peerHashes {
-			h[peer] = hash
-		}
-	})
 	return []core.DiagnosticResult{
-		peerConsistencyHashDiagnostic{h},
+		p.peerConsistencyHashDiagnostic,
 	}
 }
 
@@ -43,8 +37,11 @@ func NewProtocol() Protocol {
 		receivedDocumentHashes: &AdvertedHashQueue{
 			c: make(chan PeerHash, 1000), // TODO: Does this number make sense?
 		},
-		peerHashes:      make(map[model.PeerID]model.Hash),
-		peerHashesMutex: &concurrency.SaferRWMutex{},
+
+		peerHashes:         make(map[model.PeerID]model.Hash),
+		newPeerHashChannel: make(chan PeerHash, 100),
+
+		peerConsistencyHashDiagnostic: peerConsistencyHashDiagnostic{peerHashes: map[model.PeerID]model.Hash{}},
 	}
 }
 
@@ -83,10 +80,11 @@ func (p *protocol) updateDiagnostics() {
 	// TODO: When to exit the loop?
 	ticker := time.NewTicker(2 * time.Second)
 	for {
-		<-ticker.C
-		// TODO: Make this garbage collection less dumb. Maybe we should be notified of disconnects rather than looping each time
-		p.peerHashesMutex.WriteLock(func() {
+		select {
+		case <-ticker.C:
+			// TODO: Make this garbage collection less dumb. Maybe we should be notified of disconnects rather than looping each time
 			connectedPeers := p.p2pNetwork.Peers()
+			var changed = false
 			for peerId, _ := range p.peerHashes {
 				var present = false
 				for _, connectedPeer := range connectedPeers {
@@ -96,10 +94,25 @@ func (p *protocol) updateDiagnostics() {
 				}
 				if !present {
 					delete(p.peerHashes, peerId)
+					changed = true
 				}
 			}
-		})
+			if changed {
+				p.peerConsistencyHashDiagnostic.peerHashes = copyPeerHashMap(p.peerHashes)
+			}
+		case peerHash := <-p.newPeerHashChannel:
+			p.peerHashes[peerHash.Peer] = peerHash.Hash
+			p.peerConsistencyHashDiagnostic.peerHashes = copyPeerHashMap(p.peerHashes)
+		}
 	}
+}
+
+func copyPeerHashMap(input map[model.PeerID]model.Hash) map[model.PeerID]model.Hash {
+	var output = make(map[model.PeerID]model.Hash, len(input))
+	for k, v := range input {
+		output[k] = v
+	}
+	return output
 }
 
 func (p protocol) consumeMessages() {
@@ -126,13 +139,12 @@ func (p *protocol) handleMessage(peerMsg p2p.PeerMessage) error {
 	msg := peerMsg.Message
 	if msg.AdvertHash != nil {
 		log.Log().Debugf("Received adverted hash from peer: %s", peer)
-		p.peerHashesMutex.WriteLock(func() {
-			p.peerHashes[peer] = msg.AdvertHash.Hash
-		})
-		p.receivedConsistencyHashes.c <- PeerHash{
+		peerHash := PeerHash{
 			Peer: peer,
 			Hash: msg.AdvertHash.Hash,
 		}
+		p.newPeerHashChannel <- peerHash
+		p.receivedConsistencyHashes.c <- peerHash
 	}
 	if msg.HashListQuery != nil {
 		log.Log().Debugf("Received hash list query from peer, responding with consistency hash list (peer=%s)", peer)

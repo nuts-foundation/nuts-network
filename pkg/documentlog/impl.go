@@ -18,9 +18,9 @@ func NewDocumentLog(protocol proto.Protocol) DocumentLog {
 		lastConsistencyHash: model.EmptyHash(),
 		documentHashes:      make([]model.DocumentHash, 0),
 		documentHashIndex:   make(map[string]*entry, 0),
-		documentsMutex:      &concurrency.SaferRWMutex{},
+		documentsMutex:      concurrency.NewSaferRWMutex("doclog-docs"),
 		subscriptions:       make([]documentQueue, 0),
-		subscriptionsMutex:  &concurrency.SaferRWMutex{},
+		subscriptionsMutex:  concurrency.NewSaferRWMutex("doclog-subs"),
 	}
 }
 
@@ -43,11 +43,11 @@ type documentLog struct {
 	documentHashes []model.DocumentHash
 	// consistencyHashIndex contains the entries indexed by consistency hash
 	consistencyHashIndex map[string]*entry
-	documentsMutex       *concurrency.SaferRWMutex
+	documentsMutex       concurrency.SaferRWMutex
 	lastConsistencyHash  model.Hash
 	advertHashTimer      *time.Ticker
 	subscriptions        []documentQueue
-	subscriptionsMutex   *concurrency.SaferRWMutex
+	subscriptionsMutex   concurrency.SaferRWMutex
 	publicAddr           string
 
 	// keep diagnostic state separate from source data (share-nothing) to avoid concurrent access

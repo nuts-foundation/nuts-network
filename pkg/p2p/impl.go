@@ -34,7 +34,7 @@ type p2pNetwork struct {
 	peers map[model.PeerID]*peer
 	// peersByAddr Access MUST be wrapped in locking using peerReadLock and peerWriteLock
 	peersByAddr      map[string]*peer
-	peerMutex        *concurrency.SaferRWMutex
+	peerMutex        concurrency.SaferRWMutex
 	receivedMessages messageQueue
 }
 
@@ -98,7 +98,7 @@ func (r *remoteNode) connect(config P2PNetworkConfig) (*peer, error) {
 		InsecureSkipVerify: true, // TODO: Is the actually secure?
 		//RootCAs:      caCertPool, // TODO
 	})
-	conn, err := grpc.DialContext(cxt, r.NodeInfo.Address, grpc.WithTransportCredentials(tlsCredentials))
+	conn, err := grpc.DialContext(cxt, r.NodeInfo.Address, grpc.WithBlock(), grpc.WithTransportCredentials(tlsCredentials))
 	if err != nil {
 		return nil, err
 	}
@@ -110,6 +110,25 @@ func (r *remoteNode) connect(config P2PNetworkConfig) (*peer, error) {
 		_ = conn.Close()
 		return nil, err
 	}
+	if serverHeader, err := gate.Header(); err != nil {
+		log.Log().Errorf("Error receiving headers from server (node=%s): %v", r.NodeInfo, err)
+		_ = conn.Close()
+		return nil, err
+	} else {
+		if serverNodeID, err := nodeIDFromMetadata(serverHeader); err != nil {
+			log.Log().Errorf("Error parsing NodeID header from server (node=%s): %v", r.NodeInfo, err)
+			_ = conn.Close()
+			return nil, err
+		} else {
+			if !r.NodeInfo.ID.Empty() && r.NodeInfo.ID != serverNodeID {
+				// TODO: What to do here?
+				log.Log().Warnf("Server sent different NodeID than expected (expected=%s,actual=%s)", r.NodeInfo.ID, serverNodeID)
+			} else {
+				r.NodeInfo.ID = serverNodeID
+			}
+		}
+	}
+
 	return &peer{
 		id:     model.GetPeerID(r.NodeInfo.Address),
 		nodeID: r.NodeInfo.ID,
@@ -126,7 +145,7 @@ func NewP2PNetwork() P2PNetwork {
 		peersByAddr:          make(map[string]*peer, 0),
 		remoteNodes:          make(map[model.NodeID]*remoteNode, 0),
 		remoteNodeAddChannel: make(chan model.NodeInfo, 100), // TODO: Does this number make sense?
-		peerMutex:            &concurrency.SaferRWMutex{},
+		peerMutex:            concurrency.NewSaferRWMutex("p2p-peers"),
 		receivedMessages:     messageQueue{c: make(chan PeerMessage, 100)}, // TODO: Does this number make sense?
 	}
 }

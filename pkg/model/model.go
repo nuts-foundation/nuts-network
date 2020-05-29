@@ -57,6 +57,10 @@ func MakeConsistencyHash(h1 Hash, h2 Hash) Hash {
 
 type NodeID string
 
+func (n NodeID) Empty() bool {
+	return n == ""
+}
+
 func (n NodeID) String() string {
 	return string(n)
 }
