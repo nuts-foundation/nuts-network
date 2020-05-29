@@ -1,6 +1,7 @@
 package p2p
 
 import (
+	"crypto/tls"
 	"fmt"
 	core "github.com/nuts-foundation/nuts-go-core"
 	"github.com/nuts-foundation/nuts-network/network"
@@ -48,4 +49,6 @@ type P2PNetworkConfig struct {
 	NodeID        model.NodeID
 	PublicAddress string
 	ListenAddress string
+	ClientCert    tls.Certificate
+	ServerCert    tls.Certificate
 }

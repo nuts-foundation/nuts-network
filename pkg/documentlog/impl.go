@@ -120,7 +120,11 @@ func (dl *documentLog) AddDocumentHash(hash model.Hash, timestamp time.Time) {
 		// TODO: Isn't there a faster way to keep it sorted (or not sort it at all?)
 		// TODO: What if entries have the same timestamp? Use hash for ordering
 		sort.Slice(dl.entries, func(i, j int) bool {
-			return dl.entries[i].timestamp.Before(dl.entries[j].timestamp)
+			if dl.entries[i].timestamp == dl.entries[j].timestamp {
+				return dl.entries[i].timestamp.Before(dl.entries[j].timestamp)
+			} else {
+				return dl.entries[i].hash.String() < dl.entries[j].hash.String()
+			}
 		})
 		// Calc last consistency hash
 		// TODO: Test this
@@ -216,7 +220,7 @@ func (dl *documentLog) advertHash() {
 	for {
 		<-dl.advertHashTimer.C
 		if !dl.lastConsistencyHash.Empty() {
-			log.Log().Infof("Adverting last hash (%s)", dl.lastConsistencyHash)
+			log.Log().Debugf("Adverting last hash (%s)", dl.lastConsistencyHash)
 			dl.protocol.AdvertConsistencyHash(dl.lastConsistencyHash)
 		}
 	}

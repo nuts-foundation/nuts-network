@@ -20,6 +20,11 @@
 package pkg
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"errors"
 	core "github.com/nuts-foundation/nuts-go-core"
 	log "github.com/nuts-foundation/nuts-network/logging"
@@ -28,6 +33,7 @@ import (
 	"github.com/nuts-foundation/nuts-network/pkg/nodelist"
 	"github.com/nuts-foundation/nuts-network/pkg/p2p"
 	"github.com/nuts-foundation/nuts-network/pkg/proto"
+	"math/big"
 	"strings"
 	"sync"
 	"time"
@@ -115,6 +121,15 @@ func (n *Network) Start() error {
 		log.Log().Warn("NodeID not configured, will use node identity.")
 		networkConfig.NodeID = model.NodeID(core.NutsConfig().Identity())
 	}
+	// TODO: Use actual vendor TLS certs
+	privateKey := generateKeyPair()
+	certificate := generateCertificate(networkConfig.NodeID.String(), time.Now(), 365, privateKey)
+	networkConfig.ServerCert = tls.Certificate{
+		Certificate: [][]byte{certificate},
+		PrivateKey:  privateKey,
+	}
+	networkConfig.ClientCert = networkConfig.ServerCert
+
 	if err := n.p2pNetwork.Start(networkConfig); err != nil {
 		return err
 	}
@@ -145,4 +160,28 @@ func (n *Network) Diagnostics() []core.DiagnosticResult {
 	result = append(result, n.protocol.Diagnostics()...)
 	result = append(result, n.p2pNetwork.Diagnostics()...)
 	return result
+}
+
+func generateKeyPair() *rsa.PrivateKey {
+	keyPair, _ := rsa.GenerateKey(rand.Reader, 2048)
+	return keyPair
+}
+
+func generateCertificate(commonName string, notBefore time.Time, validityInDays int, privKey *rsa.PrivateKey) []byte {
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(time.Now().UnixNano()),
+		Subject: pkix.Name{
+			CommonName: commonName,
+		},
+		PublicKey:             privKey.PublicKey,
+		NotBefore:             notBefore,
+		NotAfter:              notBefore.AddDate(0, 0, validityInDays),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+	}
+	data, err := x509.CreateCertificate(rand.Reader, &template, &template, privKey.Public(), privKey)
+	if err != nil {
+		panic(err)
+	}
+	return data
 }

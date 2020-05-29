@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"github.com/nuts-foundation/nuts-go-core"
@@ -11,6 +12,7 @@ import (
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	errors2 "github.com/pkg/errors"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	grpcPeer "google.golang.org/grpc/peer"
 	"net"
@@ -18,8 +20,7 @@ import (
 )
 
 type p2pNetwork struct {
-	node       model.NodeInfo
-	publicAddr string
+	config P2PNetworkConfig
 
 	grpcServer *grpc.Server
 	listener   net.Listener
@@ -85,14 +86,19 @@ func (n p2pNetwork) Send(peerId model.PeerID, message *network.NetworkMessage) e
 
 type remoteNode struct {
 	model.NodeInfo
-	tryConnectTimer *time.Timer
+	backoff Backoff
 }
 
-func (r *remoteNode) connect(self model.NodeID) (*peer, error) {
+func (r *remoteNode) connect(config P2PNetworkConfig) (*peer, error) {
 	log.Log().Infof("Connecting to node: %s", r.NodeInfo)
 	// TODO: Is this the right context?
-	cxt := metadata.NewOutgoingContext(context.Background(), constructMetadata(self))
-	conn, err := grpc.DialContext(cxt, r.NodeInfo.Address, grpc.WithInsecure()) // TODO: Add TLS
+	cxt := metadata.NewOutgoingContext(context.Background(), constructMetadata(config.NodeID))
+	tlsCredentials := credentials.NewTLS(&tls.Config{
+		Certificates:       []tls.Certificate{config.ClientCert},
+		InsecureSkipVerify: true, // TODO: Is the actually secure?
+		//RootCAs:      caCertPool, // TODO
+	})
+	conn, err := grpc.DialContext(cxt, r.NodeInfo.Address, grpc.WithTransportCredentials(tlsCredentials))
 	if err != nil {
 		return nil, err
 	}
@@ -135,17 +141,20 @@ func (m messageQueue) Get() PeerMessage {
 
 func (n *p2pNetwork) Start(config P2PNetworkConfig) error {
 	log.Log().Infof("Starting gRPC server (ID: %s) on %s", config.NodeID, config.ListenAddress)
-	n.publicAddr = config.PublicAddress
+	n.config = config
 	var err error
-	n.node.ID = config.NodeID
+	// TODO: Verify TLS configuration
+	tlsCredentials := credentials.NewTLS(&tls.Config{
+		Certificates: []tls.Certificate{config.ServerCert},
+		ClientAuth:   tls.RequireAnyClientCert, // TODO: Switch to RequireAndVerify
+		// TODO: Add RootCAs/ClientCAs option
+	})
 	n.listener, err = net.Listen("tcp", config.ListenAddress)
 	if err != nil {
 		return err
 	}
-	n.grpcServer = grpc.NewServer()
+	n.grpcServer = grpc.NewServer(grpc.Creds(tlsCredentials))
 	network.RegisterNetworkServer(n.grpcServer, n)
-	// TODO enable TLS
-	// Start server
 	go func() {
 		err = n.grpcServer.Serve(n.listener)
 		if err != nil {
@@ -202,26 +211,24 @@ func (n *p2pNetwork) connectToRemoteNodes() {
 		if n.remoteNodes[nodeInfo.ID] == nil {
 			remoteNode := &remoteNode{
 				NodeInfo: nodeInfo,
-				tryConnectTimer: time.NewTimer(0), // Start immediately for the first time
+				backoff:  defaultBackoff(),
 			}
 			n.remoteNodes[nodeInfo.ID] = remoteNode
 			log.Log().Infof("Added remote node: %s", nodeInfo)
 			go func() {
-				<-remoteNode.tryConnectTimer.C
-				if n.shouldConnectTo(n.node) {
-					if peer, err := remoteNode.connect(n.node.ID); err != nil {
-						log.Log().Warnf("Couldn't connect to node (node=%s): %v", remoteNode.NodeInfo, err)
-						remoteNode.tryConnectTimer.Reset(time.Second)
-						// What about backoff?
-					} else {
-						n.sendAndReceiveForPeer(peer)
-						log.Log().Infof("Connected to node: %s", remoteNode.NodeInfo)
-						remoteNode.tryConnectTimer.Reset(10 * time.Second)
+				for {
+					if n.shouldConnectTo(remoteNode.NodeInfo) {
+						if peer, err := remoteNode.connect(n.config); err != nil {
+							waitPeriod := remoteNode.backoff.Backoff()
+							log.Log().Warnf("Couldn't connect to node, reconnecting in %d seconds (node=%s,err=%v)", int(waitPeriod.Seconds()), remoteNode.NodeInfo, err)
+							time.Sleep(waitPeriod)
+						} else {
+							n.sendAndReceiveForPeer(peer)
+							remoteNode.backoff.Reset()
+							log.Log().Infof("Connected to node: %s", remoteNode.NodeInfo)
+						}
 					}
-				} else {
-					// We're already connected or we shouldn't connect to this node at all
-					// TODO: Reconnection should be smarter (and not timer-based)
-					remoteNode.tryConnectTimer.Reset(30 * time.Second)
+					time.Sleep(5 * time.Second)
 				}
 			}()
 		}
@@ -230,7 +237,7 @@ func (n *p2pNetwork) connectToRemoteNodes() {
 
 // shouldConnectTo checks whether we should connect to the given node.
 func (n p2pNetwork) shouldConnectTo(nodeInfo model.NodeInfo) bool {
-	if normalizeAddress(nodeInfo.Address) == normalizeAddress(n.publicAddr) {
+	if normalizeAddress(nodeInfo.Address) == normalizeAddress(n.config.PublicAddress) {
 		// We're not going to connect to our own node
 		log.Log().Debug("Not connecting since it's localhost")
 		return false
@@ -272,7 +279,7 @@ func (n p2pNetwork) Connect(stream network.Network_ConnectServer) error {
 		return err
 	}
 	// We received our peer's NodeID, now send our own.
-	if err := stream.SendHeader(constructMetadata(n.node.ID)); err != nil {
+	if err := stream.SendHeader(constructMetadata(n.config.NodeID)); err != nil {
 		return errors2.Wrap(err, "unable to send headers")
 	}
 	peer := &peer{

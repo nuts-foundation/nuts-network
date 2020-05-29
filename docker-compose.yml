@@ -5,6 +5,8 @@ services:
     environment:
       NUTS_ADDRESS: 0.0.0.0:1323
       NUTS_IDENTITY: urn:oid:1.3.6.1.4.1.54851.4:00000001
+#      GRPC_GO_LOG_SEVERITY_LEVEL: info
+#      GRPC_GO_LOG_VERBOSITY_LEVEL: 2
     command: ["/bin/sh", "-c", "/usr/bin/nuts-network server --publicAddr=bootstrap:5555 --nodeID=bootstrap"]
     networks:
       - nuts
@@ -15,6 +17,8 @@ services:
     environment:
       NUTS_IDENTITY: urn:oid:1.3.6.1.4.1.54851.4:00000001
       NUTS_BOOTSTRAPNODES: bootstrap:5555
+#      GRPC_GO_LOG_SEVERITY_LEVEL: info
+#      GRPC_GO_LOG_VERBOSITY_LEVEL: 2
     networks:
       - nuts
 networks:
