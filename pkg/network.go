@@ -20,6 +20,7 @@
 package pkg
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
@@ -33,6 +34,7 @@ import (
 	"github.com/nuts-foundation/nuts-network/pkg/nodelist"
 	"github.com/nuts-foundation/nuts-network/pkg/p2p"
 	"github.com/nuts-foundation/nuts-network/pkg/proto"
+	"io"
 	"math/big"
 	"strings"
 	"sync"
@@ -42,14 +44,12 @@ import (
 // ModuleName defines the name of this module
 const ModuleName = "Network"
 
-// NetworkClient is the interface to be implemented by any remote or local client
-type NetworkClient interface {
-}
-
 // NetworkConfig holds the config
 type NetworkConfig struct {
 	// Socket address for gRPC to listen on
 	GrpcAddr string
+	Mode     string
+	Address  string
 	// Public address of this nodes other nodes can use to connect to this node.
 	PublicAddr     string
 	BootstrapNodes string
@@ -98,13 +98,15 @@ func NetworkInstance() *Network {
 func (n *Network) Configure() error {
 	var err error
 	n.configOnce.Do(func() {
-		// TODO: Why isn't this in core?
-		if core.NutsConfig().Identity() == "" {
-			err = errors.New("nuts identity not configured")
-			return
+		cfg := core.NutsConfig()
+		n.Config.Mode = cfg.GetEngineMode(n.Config.Mode)
+		if n.Config.Address == "" {
+			n.Config.Address = cfg.ServerAddress()
 		}
-		for _, nodeInfo := range n.Config.ParseBootstrapNodes() {
-			n.p2pNetwork.AddRemoteNode(model.ParseNodeInfo(nodeInfo))
+		if n.Config.Mode == core.ServerEngineMode {
+			for _, nodeInfo := range n.Config.ParseBootstrapNodes() {
+				n.p2pNetwork.AddRemoteNode(model.ParseNodeInfo(nodeInfo))
+			}
 		}
 	})
 	return err
@@ -112,6 +114,9 @@ func (n *Network) Configure() error {
 
 // Start initiates the network subsystem
 func (n *Network) Start() error {
+	if n.Config.Mode != core.ServerEngineMode {
+		return nil
+	}
 	networkConfig := p2p.P2PNetworkConfig{
 		ListenAddress: n.Config.GrpcAddr,
 		PublicAddress: n.Config.PublicAddr,
@@ -139,19 +144,43 @@ func (n *Network) Start() error {
 	return nil
 }
 
-func (n *Network) AddDocument(contents []byte) error {
-	n.documentLog.AddDocument(&model.Document{
-		Contents:  contents,
-		Timestamp: time.Now(),
-	})
-	return nil
+func (n *Network) GetDocument(hash model.Hash) (*model.Document, error) {
+	return n.documentLog.GetDocument(hash), nil
+}
+
+func (n *Network) GetDocumentContents(hash model.Hash) (io.ReadCloser, error) {
+	return n.documentLog.GetDocumentContents(hash)
+}
+
+func (n *Network) ListDocuments() ([]model.Document, error) {
+	return n.documentLog.Documents(), nil
+}
+
+func (n *Network) AddDocumentWithContents(timestamp time.Time, docType string, contents []byte) (model.Document, error) {
+	log.Log().Infof("Adding document (timestamp=%d,type=%s,content length=%d)", timestamp.UnixNano(), docType, len(contents))
+	// TODO: Validation
+	document := model.Document{
+		Type:      docType,
+		Timestamp: timestamp,
+	}
+	document.Hash = model.CalculateDocumentHash(document.Type, document.Timestamp, contents)
+	if n.documentLog.HasDocument(document.Hash) {
+		return model.Document{}, errors.New("document already exists")
+	}
+	if err := n.documentLog.AddDocumentWithContents(document, bytes.NewReader(contents)); err != nil {
+		return model.Document{}, err
+	}
+	return document, nil
 }
 
 // Shutdown cleans up any leftover go routines
 func (n *Network) Shutdown() error {
-	n.nodeList.Stop()
-	n.documentLog.Stop()
-	return n.p2pNetwork.Stop()
+	if n.Config.Mode == core.ServerEngineMode {
+		n.nodeList.Stop()
+		n.documentLog.Stop()
+		return n.p2pNetwork.Stop()
+	}
+	return nil
 }
 
 func (n *Network) Diagnostics() []core.DiagnosticResult {
@@ -173,11 +202,11 @@ func generateCertificate(commonName string, notBefore time.Time, validityInDays 
 		Subject: pkix.Name{
 			CommonName: commonName,
 		},
-		PublicKey:             privKey.PublicKey,
-		NotBefore:             notBefore,
-		NotAfter:              notBefore.AddDate(0, 0, validityInDays),
-		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		PublicKey:   privKey.PublicKey,
+		NotBefore:   notBefore,
+		NotAfter:    notBefore.AddDate(0, 0, validityInDays),
+		KeyUsage:    x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 	}
 	data, err := x509.CreateCertificate(rand.Reader, &template, &template, privKey.Public(), privKey)
 	if err != nil {

@@ -51,7 +51,6 @@ func Execute() {
 
 	defer engineInstance.Shutdown()
 
-	engineInstance.Cmd.SetArgs([]string{"server"})
 	engineInstance.Cmd.Execute()
 
 	println("EXIT")

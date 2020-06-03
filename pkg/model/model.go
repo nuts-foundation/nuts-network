@@ -11,11 +11,6 @@ import (
 
 const HashSize = 20
 
-type DocumentHash struct {
-	Hash
-	Timestamp time.Time
-}
-
 type Hash []byte
 
 func EmptyHash() Hash {
@@ -46,6 +41,17 @@ func (h Hash) String() string {
 	return hex.EncodeToString(h)
 }
 
+func ParseHash(input string) (Hash, error) {
+	bytes, err := hex.DecodeString(input)
+	if err != nil {
+		return nil, err
+	}
+	if len(bytes) != HashSize {
+		return nil, fmt.Errorf("incorrect hash length (%d)", len(bytes))
+	}
+	return bytes, nil
+}
+
 func MakeConsistencyHash(h1 Hash, h2 Hash) Hash {
 	target := EmptyHash()
 	// TODO: This a naive, relatively slow to XOR 2 byte slices. There's a faster way: https://github.com/lukechampine/fastxor/blob/master/xor.go
@@ -73,18 +79,19 @@ func GetPeerID(addr string) PeerID {
 
 // TODO: Should this be an interface?
 type Document struct {
-	Contents  []byte
+	Hash      Hash
 	Type      string
 	Timestamp time.Time
 }
 
-func (d Document) Hash() Hash {
+func CalculateDocumentHash(docType string, timestamp time.Time, contents []byte) Hash {
 	// TODO: Document this
 	input := map[string]interface{}{
-		"contents": d.Contents,
-		"type": d.Type,
-		"timestamp": d.Timestamp.UnixNano(),
+		"contents":  contents,
+		"type":      docType,
+		"timestamp": timestamp.UnixNano(),
 	}
+	// TODO: Canonicalize?
 	data, _ := json.Marshal(input)
 	h := sha1.Sum(data)
 	return h[:]

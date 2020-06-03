@@ -1,6 +1,7 @@
 package nodelist
 
 import (
+	"bytes"
 	"encoding/json"
 	log "github.com/nuts-foundation/nuts-network/logging"
 	"github.com/nuts-foundation/nuts-network/pkg/documentlog"
@@ -12,9 +13,9 @@ import (
 const nodeInfoDocumentType = "node-info"
 
 type nodeList struct {
-	documents             documentlog.DocumentLog
-	p2pNetwork            p2p.P2PNetwork
-	publicAddr            string
+	documents  documentlog.DocumentLog
+	p2pNetwork p2p.P2PNetwork
+	publicAddr string
 }
 
 func (n *nodeList) Start(nodeID model.NodeID, publicAddr string) {
@@ -25,7 +26,15 @@ func (n *nodeList) Start(nodeID model.NodeID, publicAddr string) {
 		n.publicAddr = publicAddr
 		log.Log().Infof("Registering local node on nodelist (id=%s,addr=%s)", nodeID, publicAddr)
 		data, _ := json.Marshal(model.NodeInfo{ID: nodeID, Address: publicAddr})
-		n.documents.AddDocument(&model.Document{Timestamp: time.Now(), Contents: data, Type: nodeInfoDocumentType})
+		document := model.Document{
+			Timestamp: time.Now(),
+			Type:      nodeInfoDocumentType,
+		}
+		document.Hash = model.CalculateDocumentHash(document.Type, document.Timestamp, data)
+		if err := n.documents.AddDocumentWithContents(document, bytes.NewReader(data)); err != nil {
+			// TODO: Shouldn't this be blocking?
+			log.Log().Errorf("Error while adding document with contents: %v", err)
+		}
 	}
 	documentQueue := n.documents.Subscribe(nodeInfoDocumentType)
 	go n.consumeNodeInfo(documentQueue)
@@ -40,8 +49,19 @@ func (n *nodeList) consumeNodeInfo(queue documentlog.DocumentQueue) {
 	for {
 		document := queue.Get()
 		nodeInfo := model.NodeInfo{}
-		if err := json.Unmarshal(document.Contents, &nodeInfo); err != nil {
-			log.Log().Errorf("Can't parse node info from document (hash=%s)", document.Hash())
+		reader, err := n.documents.GetDocumentContents(document.Hash)
+		defer reader.Close()
+		if err != nil {
+			log.Log().Errorf("Can't retrieve document contents (hash=%s): %v", document.Hash, err)
+			continue
+		}
+		buffer := new(bytes.Buffer)
+		if _, err = buffer.ReadFrom(reader); err != nil {
+			log.Log().Errorf("Can't read document contents (hash=%s): %v", document.Hash, err)
+			continue
+		}
+		if err := json.Unmarshal(buffer.Bytes(), &nodeInfo); err != nil {
+			log.Log().Errorf("Can't parse node info from document (hash=%s): %v", document.Hash, err)
 			continue
 		}
 		log.Log().Tracef("Parsed node info (ID=%s,Addr=%s)", nodeInfo.ID, nodeInfo.Address)

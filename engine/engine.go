@@ -20,15 +20,21 @@
 package engine
 
 import (
+	"fmt"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	core "github.com/nuts-foundation/nuts-go-core"
+	"github.com/nuts-foundation/nuts-network/api"
+	"github.com/nuts-foundation/nuts-network/client"
 	logging "github.com/nuts-foundation/nuts-network/logging"
 	pkg "github.com/nuts-foundation/nuts-network/pkg"
+	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"io"
 	"os"
 	"os/signal"
+	"strings"
 )
 
 // NewNetworkEngine returns the core definition for the network
@@ -41,9 +47,12 @@ func NewNetworkEngine() *core.Engine {
 		ConfigKey:   "network",
 		Diagnostics: engine.Diagnostics,
 		FlagSet:     flagSet(),
-		Name:        pkg.ModuleName,
-		Start:       engine.Start,
-		Shutdown:    engine.Shutdown,
+		Routes: func(router core.EchoRouter) {
+			api.RegisterHandlers(router, &api.ApiWrapper{Service: pkg.NetworkInstance()})
+		},
+		Name:     pkg.ModuleName,
+		Start:    engine.Start,
+		Shutdown: engine.Shutdown,
 	}
 }
 
@@ -53,6 +62,8 @@ func flagSet() *pflag.FlagSet {
 	flagSet.String("publicAddr", "", "Public address other nodes can connect to. If empty, the node will not be registered on the nodelist.")
 	flagSet.String("bootstrapNodes", "", "Space-separated list of bootstrap node addresses")
 	flagSet.String("nodeID", "", "ID of this node. If not set, the node's identity will be used.")
+	flagSet.String("mode", "", "server or client, when client it uses the HttpClient")
+	flagSet.String("address", "", "Interface and port for http server to bind to, defaults to global Nuts address.")
 	return flagSet
 }
 
@@ -79,6 +90,7 @@ func Cmd() *cobra.Command {
 			echo.HideBanner = true
 			echo.Use(middleware.Logger())
 			core.NewStatusEngine().Routes(echo)
+			api.RegisterHandlers(echo, &api.ApiWrapper{Service: pkg.NetworkInstance()})
 
 			// todo move to nuts-go-core
 			sigc := make(chan os.Signal, 1)
@@ -97,11 +109,73 @@ func Cmd() *cobra.Command {
 	})
 
 	cmd.AddCommand(&cobra.Command{
-		Use:   "add",
-		Short: "Add a document to the network",
+		Use:   "list",
+		Short: "Lists the documents on the network",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			instance := client.NewNetworkClient()
+			documents, err := instance.ListDocuments()
+			if err != nil {
+				return err
+			}
+			const format = "%-40s %-40s %-20s\n"
+			fmt.Printf(format, "Hash", "Timestamp", "Type")
+			for _, document := range documents {
+				fmt.Printf(format, document.Hash, document.Timestamp, document.Type)
+			}
+			return nil
+		},
+	})
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "get [hash]",
+		Short: "Gets a document from the network",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return pkg.NetworkInstance().AddDocument([]byte(args[0]))
+			hash, err := model.ParseHash(args[0])
+			if err != nil {
+				return err
+			}
+			instance := client.NewNetworkClient()
+			document, err := instance.GetDocument(hash)
+			if err != nil {
+				return err
+			}
+			if document == nil {
+				logging.Log().Warnf("Document not found: %s", hash)
+				return nil
+			}
+			logging.Log().Infof("Document %s:\n  Type: %s\n  Timestamp: %s", document.Hash, document.Type, document.Timestamp)
+			return nil
+		},
+	})
+
+	cmd.AddCommand(&cobra.Command{
+		Use:   "contents [hash]",
+		Short: "Retrieves the contents of a document from the network",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			hash, err := model.ParseHash(args[0])
+			if err != nil {
+				return err
+			}
+			instance := client.NewNetworkClient()
+			reader, err := instance.GetDocumentContents(hash)
+			if err != nil {
+				return err
+			}
+			if reader == nil {
+				logging.Log().Warnf("Document or contents not found: %s", hash)
+				return nil
+			}
+			defer reader.Close()
+			buf := new(strings.Builder)
+			_, err = io.Copy(buf, reader)
+			if err != nil {
+				logging.Log().Warnf("Unable to read contents: %v", err)
+				return nil
+			}
+			println(buf.String())
+			return nil
 		},
 	})
 	return cmd

@@ -5,7 +5,7 @@ import (
 	core "github.com/nuts-foundation/nuts-go-core"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/pkg/p2p"
-	"time"
+	"io"
 )
 
 const Version = 1
@@ -42,12 +42,15 @@ type PeerHash struct {
 }
 
 type HashSource interface {
-	DocumentHashes() []model.DocumentHash
+	Documents() []model.Document
 	// HasDocument tests whether the document is present for the given hash
 	HasDocument(hash model.Hash) bool
-	GetDocument(hash model.Hash) model.Document
-	AddDocument(document *model.Document)
-	AddDocumentHash(hash model.Hash, timestamp time.Time)
+	HasContentsForDocument(hash model.Hash) bool
+	GetDocument(hash model.Hash) *model.Document
+	GetDocumentContents(hash model.Hash) (io.ReadCloser, error)
+	AddDocument(document model.Document)
+	AddDocumentWithContents(document model.Document, contents io.Reader) error
+	AddDocumentContents(hash model.Hash, contents io.Reader) error
 }
 
 type AdvertedHashQueue struct {

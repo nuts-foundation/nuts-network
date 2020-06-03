@@ -3,6 +3,7 @@ module github.com/nuts-foundation/nuts-network
 go 1.13
 
 require (
+	github.com/deepmap/oapi-codegen v1.3.8
 	github.com/golang/mock v1.4.3
 	github.com/golang/protobuf v1.4.2
 	github.com/google/uuid v1.1.1

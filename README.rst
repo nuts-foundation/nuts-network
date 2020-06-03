@@ -40,6 +40,12 @@ Building
 
 This project is part of https://github.com/nuts-foundation/nuts-go. If you do however would like a binary, just use ``go build``.
 
+The (internal) server and client API is generated from the open-api spec:
+
+.. code-block:: shell
+
+    oapi-codegen -generate types,server,client -package api docs/_static/nuts-network.yaml > api/generated.go
+
 The peer-to-peer API uses gRPC. To generate Go code from the protobuf specs you need the `protoc-gen-go` package:
 
 .. code-block:: shell
