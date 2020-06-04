@@ -184,7 +184,9 @@ func (p *protocol) handleMessage(peerMsg p2p.PeerMessage) error {
 				p.hashSource.AddDocument(document)
 			}
 			if !p.hashSource.HasContentsForDocument(hash) {
-				log.Log().Infof("Received document hash from peer that we don't have yet, will query it (peer=%s,hash=%s)", peer, model.Hash(hash))
+				// TODO: Currently we send the query to the peer that send us the hash, but this peer might not have the
+				//   document contents. We need a smarter way to get it from a peer who does.
+				log.Log().Infof("Received document hash from peer that we don't have yet, will query it (peer=%s,hash=%s)", peer, hash)
 				responseMsg := createMessage()
 				responseMsg.DocumentContentsQuery = &network.DocumentContentsQuery{Hash: hash}
 				if err := p.p2pNetwork.Send(peer, &responseMsg); err != nil {
