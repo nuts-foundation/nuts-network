@@ -58,6 +58,12 @@ To generate the Go server and client code, run the following command:
 
     protoc -I network network/network.proto --go_out=plugins=grpc,paths=source_relative:network
 
+To generate the mocks, run the following commands:
+
+.. code-block:: shell
+
+    ~/go/bin/mockgen -destination=mock/mock_client.go -package=mock -source=pkg/interface.go
+
 Running in Docker
 *****************
 

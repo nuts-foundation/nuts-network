@@ -72,13 +72,13 @@ func (a ApiWrapper) GetDocumentContents(ctx echo.Context, hashAsString string) e
 		return ctx.String(http.StatusBadRequest, err.Error())
 	}
 	reader, err := a.Service.GetDocumentContents(hash)
-	defer reader.Close()
 	if err != nil {
 		return ctx.String(http.StatusInternalServerError, err.Error())
 	}
 	if reader == nil {
 		return ctx.String(http.StatusNotFound, "document or contents not found")
 	}
+	defer reader.Close()
 	ctx.Response().Header().Set(echo.HeaderContentType, "application/octet-stream")
 	ctx.Response().WriteHeader(http.StatusOK)
 	_, err = io.Copy(ctx.Response().Writer, reader)

@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-const AdvertHashInterval = 2 * time.Second
+var AdvertHashInterval = 2 * time.Second
 
 var ErrMissingDocumentContents = errors.New("we don't have the contents for the document (yet)")
 var ErrUnknownDocument = errors.New("unknown document")
@@ -107,7 +107,7 @@ func (dl documentLog) GetDocumentContents(hash model.Hash) (io.ReadCloser, error
 	if entry.contents == nil {
 		return nil, ErrMissingDocumentContents
 	}
-	return nopCloser{Reader: bytes.NewReader(*entry.contents)}, nil
+	return NoopCloser{Reader: bytes.NewReader(*entry.contents)}, nil
 }
 
 func (dl *documentLog) HasDocument(hash model.Hash) bool {
@@ -247,7 +247,7 @@ func (dl *documentLog) resolveAdvertedHashes() {
 			log.Log().Debugf("Received unknown consistency hash, will query for document hash list (peer=%s,hash=%s)", peerHash.Peer, peerHash.Hash)
 			// TODO: Don't have multiple parallel queries for the same peer / hash
 			if err := dl.protocol.QueryHashList(peerHash.Peer); err != nil {
-				log.Log().Errorf("Could query peer for hash list (peer=%s)", peerHash.Peer, err)
+				log.Log().Errorf("Could query peer for hash list (peer=%s): %v", peerHash.Peer, err)
 			}
 		} else {
 			log.Log().Debugf("Received known consistency hash, no action is required")
@@ -265,8 +265,10 @@ func (dl *documentLog) advertHash() {
 	}
 }
 
-type nopCloser struct {
+// NoopCloser implements io.ReadCloser with a No-Operation, intended for returning byte slices.
+type NoopCloser struct {
 	io.Reader
+	io.Closer
 }
 
-func (nopCloser) Close() error { return nil }
+func (NoopCloser) Close() error { return nil }

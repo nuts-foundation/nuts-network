@@ -42,7 +42,10 @@ func (p *peer) close() {
 		}
 		p.conn = nil
 	}
-	close(p.outMessages)
+	if p.outMessages != nil {
+		close(p.outMessages)
+		p.outMessages = nil
+	}
 }
 
 func (p *peer) send(message *network.NetworkMessage) {

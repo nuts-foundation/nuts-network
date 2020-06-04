@@ -19,6 +19,8 @@ import (
 	"time"
 )
 
+type Dialer func(ctx context.Context, target string, opts ...grpc.DialOption) (conn *grpc.ClientConn, err error)
+
 type p2pNetwork struct {
 	config P2PNetworkConfig
 
@@ -36,6 +38,7 @@ type p2pNetwork struct {
 	peersByAddr      map[string]*peer
 	peerMutex        concurrency.SaferRWMutex
 	receivedMessages messageQueue
+	peerDialer       Dialer
 }
 
 func (n p2pNetwork) Diagnostics() []core.DiagnosticResult {
@@ -87,6 +90,7 @@ func (n p2pNetwork) Send(peerId model.PeerID, message *network.NetworkMessage) e
 type remoteNode struct {
 	model.NodeInfo
 	backoff Backoff
+	Dialer
 }
 
 func (r *remoteNode) connect(config P2PNetworkConfig) (*peer, error) {
@@ -98,7 +102,7 @@ func (r *remoteNode) connect(config P2PNetworkConfig) (*peer, error) {
 		InsecureSkipVerify: true, // TODO: Is the actually secure?
 		//RootCAs:      caCertPool, // TODO
 	})
-	conn, err := grpc.DialContext(cxt, r.NodeInfo.Address, grpc.WithBlock(), grpc.WithTransportCredentials(tlsCredentials))
+	conn, err := r.Dialer(cxt, r.NodeInfo.Address, grpc.WithBlock(), grpc.WithTransportCredentials(tlsCredentials))
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +151,15 @@ func NewP2PNetwork() P2PNetwork {
 		remoteNodeAddChannel: make(chan model.NodeInfo, 100), // TODO: Does this number make sense?
 		peerMutex:            concurrency.NewSaferRWMutex("p2p-peers"),
 		receivedMessages:     messageQueue{c: make(chan PeerMessage, 100)}, // TODO: Does this number make sense?
+		peerDialer:           grpc.DialContext,
 	}
+}
+
+func NewP2PNetworkWithOptions(listener net.Listener, dialer Dialer) P2PNetwork {
+	result := NewP2PNetwork().(*p2pNetwork)
+	result.listener = listener
+	result.peerDialer = dialer
+	return result
 }
 
 type messageQueue struct {
@@ -159,20 +171,30 @@ func (m messageQueue) Get() PeerMessage {
 }
 
 func (n *p2pNetwork) Start(config P2PNetworkConfig) error {
+	if config.NodeID == "" {
+		return errors.New("NodeID is empty")
+	}
+	if config.ListenAddress == "" {
+		return errors.New("ListenAddress is empty")
+	}
 	log.Log().Infof("Starting gRPC server (ID: %s) on %s", config.NodeID, config.ListenAddress)
 	n.config = config
 	var err error
-	// TODO: Verify TLS configuration
-	tlsCredentials := credentials.NewTLS(&tls.Config{
-		Certificates: []tls.Certificate{config.ServerCert},
-		ClientAuth:   tls.RequireAnyClientCert, // TODO: Switch to RequireAndVerify
-		// TODO: Add RootCAs/ClientCAs option
-	})
-	n.listener, err = net.Listen("tcp", config.ListenAddress)
-	if err != nil {
-		return err
+	// We allow test code to set the listener to allow for in-memory (bufnet) channels
+	var serverOpts = make([]grpc.ServerOption, 0)
+	if n.listener == nil {
+		n.listener, err = net.Listen("tcp", config.ListenAddress)
+		if err != nil {
+			return err
+		}
+		// TODO: Verify TLS configuration
+		serverOpts = append(serverOpts, grpc.Creds(credentials.NewTLS(&tls.Config{
+			Certificates: []tls.Certificate{config.ServerCert},
+			ClientAuth:   tls.RequireAnyClientCert, // TODO: Switch to RequireAndVerify
+			// TODO: Add RootCAs/ClientCAs option
+		})))
 	}
-	n.grpcServer = grpc.NewServer(grpc.Creds(tlsCredentials))
+	n.grpcServer = grpc.NewServer(serverOpts...)
 	network.RegisterNetworkServer(n.grpcServer, n)
 	go func() {
 		err = n.grpcServer.Serve(n.listener)
@@ -210,7 +232,6 @@ func (n *p2pNetwork) Stop() error {
 func (n p2pNetwork) AddRemoteNode(nodeInfo model.NodeInfo) {
 	if n.shouldConnectTo(nodeInfo) {
 		n.remoteNodeAddChannel <- nodeInfo
-		log.Log().Infof("Added remote node to connect to: %s", nodeInfo)
 	}
 }
 
@@ -231,6 +252,7 @@ func (n *p2pNetwork) connectToRemoteNodes() {
 			remoteNode := &remoteNode{
 				NodeInfo: nodeInfo,
 				backoff:  defaultBackoff(),
+				Dialer:   n.peerDialer,
 			}
 			n.remoteNodes[nodeInfo.ID] = remoteNode
 			log.Log().Infof("Added remote node: %s", nodeInfo)
@@ -301,12 +323,18 @@ func (n p2pNetwork) Connect(stream network.Network_ConnectServer) error {
 	if err := stream.SendHeader(constructMetadata(n.config.NodeID)); err != nil {
 		return errors2.Wrap(err, "unable to send headers")
 	}
+	remoteAddr := peerCtx.Addr.String()
+	if remoteAddr == "bufconn" {
+		// This is a shared-memory connection, in which case we should take the nodeID since all incoming shared-memory
+		// connections have the same remote address.
+		remoteAddr = nodeID.String()
+	}
 	peer := &peer{
 		// TODO
-		id:     model.GetPeerID(peerCtx.Addr.String()),
+		id:     model.GetPeerID(remoteAddr),
 		nodeID: nodeID,
 		gate:   stream,
-		addr:   peerCtx.Addr.String(),
+		addr:   remoteAddr,
 	}
 	n.sendAndReceiveForPeer(peer)
 	return nil
