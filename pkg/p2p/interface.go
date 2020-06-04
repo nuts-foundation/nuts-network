@@ -21,6 +21,7 @@ package p2p
 import (
 	"crypto/tls"
 	"fmt"
+	"github.com/nuts-foundation/nuts-crypto/pkg/cert"
 	"github.com/nuts-foundation/nuts-network/network"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/pkg/stats"
@@ -69,4 +70,5 @@ type P2PNetworkConfig struct {
 	ListenAddress string
 	ClientCert    tls.Certificate
 	ServerCert    tls.Certificate
+	TrustStore    cert.TrustStore
 }

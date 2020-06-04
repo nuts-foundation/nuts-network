@@ -20,11 +20,9 @@ package pkg
 
 import (
 	"bytes"
-	"crypto/rand"
-	"crypto/rsa"
 	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
+	crypto "github.com/nuts-foundation/nuts-crypto/pkg"
+	"github.com/nuts-foundation/nuts-crypto/pkg/types"
 	core "github.com/nuts-foundation/nuts-go-core"
 	log "github.com/nuts-foundation/nuts-network/logging"
 	"github.com/nuts-foundation/nuts-network/pkg/documentlog"
@@ -33,8 +31,8 @@ import (
 	"github.com/nuts-foundation/nuts-network/pkg/p2p"
 	"github.com/nuts-foundation/nuts-network/pkg/proto"
 	"github.com/nuts-foundation/nuts-network/pkg/stats"
+	errors2 "github.com/pkg/errors"
 	"io"
-	"math/big"
 	"strings"
 	"sync"
 	"time"
@@ -53,6 +51,8 @@ type NetworkConfig struct {
 	PublicAddr     string
 	BootstrapNodes string
 	NodeID         string
+	CertFile       string
+	CertKeyFile    string
 }
 
 func (c NetworkConfig) ParseBootstrapNodes() []string {
@@ -74,6 +74,7 @@ type Network struct {
 	protocol    proto.Protocol
 	documentLog documentlog.DocumentLog
 	nodeList    nodelist.NodeList
+	crypto      crypto.Client
 }
 
 var instance *Network
@@ -103,6 +104,7 @@ func (n *Network) Configure() error {
 			n.Config.Address = cfg.ServerAddress()
 		}
 		if n.Config.Mode == core.ServerEngineMode {
+			n.crypto = crypto.NewCryptoClient()
 			for _, nodeInfo := range n.Config.ParseBootstrapNodes() {
 				n.p2pNetwork.AddRemoteNode(model.ParseNodeInfo(nodeInfo))
 			}
@@ -116,25 +118,11 @@ func (n *Network) Start() error {
 	if n.Config.Mode != core.ServerEngineMode {
 		return nil
 	}
-	networkConfig := p2p.P2PNetworkConfig{
-		ListenAddress: n.Config.GrpcAddr,
-		PublicAddress: n.Config.PublicAddr,
-		NodeID:        model.NodeID(n.Config.NodeID),
+	networkConfig, err := n.buildP2PConfig()
+	if err != nil {
+		return err
 	}
-	if networkConfig.NodeID == "" {
-		log.Log().Warn("NodeID not configured, will use node identity.")
-		networkConfig.NodeID = model.NodeID(core.NutsConfig().Identity())
-	}
-	// TODO: Use actual vendor TLS certs
-	privateKey := generateKeyPair()
-	certificate := generateCertificate(networkConfig.NodeID.String(), time.Now(), 365, privateKey)
-	networkConfig.ServerCert = tls.Certificate{
-		Certificate: [][]byte{certificate},
-		PrivateKey:  privateKey,
-	}
-	networkConfig.ClientCert = networkConfig.ServerCert
-
-	if err := n.p2pNetwork.Start(networkConfig); err != nil {
+	if err := n.p2pNetwork.Start(*networkConfig); err != nil {
 		return err
 	}
 	n.protocol.Start(n.p2pNetwork, n.documentLog)
@@ -184,26 +172,36 @@ func (n *Network) Diagnostics() []core.DiagnosticResult {
 	return result
 }
 
-func generateKeyPair() *rsa.PrivateKey {
-	keyPair, _ := rsa.GenerateKey(rand.Reader, 2048)
-	return keyPair
-}
-
-func generateCertificate(commonName string, notBefore time.Time, validityInDays int, privKey *rsa.PrivateKey) []byte {
-	template := x509.Certificate{
-		SerialNumber: big.NewInt(time.Now().UnixNano()),
-		Subject: pkix.Name{
-			CommonName: commonName,
-		},
-		PublicKey:   privKey.PublicKey,
-		NotBefore:   notBefore,
-		NotAfter:    notBefore.AddDate(0, 0, validityInDays),
-		KeyUsage:    x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
-		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+func (n *Network) buildP2PConfig() (*p2p.P2PNetworkConfig, error) {
+	cfg := p2p.P2PNetworkConfig{
+		ListenAddress: n.Config.GrpcAddr,
+		PublicAddress: n.Config.PublicAddr,
+		NodeID:        model.NodeID(n.Config.NodeID),
+		TrustStore:    n.crypto.TrustStore(),
 	}
-	data, err := x509.CreateCertificate(rand.Reader, &template, &template, privKey.Public(), privKey)
-	if err != nil {
-		panic(err)
+	identity := core.NutsConfig().Identity()
+	if cfg.NodeID == "" {
+		log.Log().Warn("NodeID not configured, will use node identity.")
+		cfg.NodeID = model.NodeID(identity)
 	}
-	return data
+	if n.Config.CertFile == "" && n.Config.CertKeyFile == "" {
+		log.Log().Info("No certificate and/or key file specified, will load TLS certificate from crypto module.")
+		tlsCertificate, privateKey, err := n.crypto.GetTLSCertificate(types.KeyForEntity(types.LegalEntity{URI: identity}))
+		if err != nil {
+			return nil, errors2.Wrap(err, "unable to load node TLS certificate and/or key from crypto module")
+		}
+		cfg.ServerCert = tls.Certificate{
+			Certificate: [][]byte{tlsCertificate.Raw},
+			PrivateKey:  privateKey,
+			Leaf:        tlsCertificate,
+		}
+	} else {
+		log.Log().Info("Will load TLS certificate from specified certificate/key file")
+		var err error
+		if cfg.ServerCert, err = tls.LoadX509KeyPair(n.Config.CertFile, n.Config.CertKeyFile); err != nil {
+			return nil, errors2.Wrap(err, "unable to load node TLS certificate and/or key from file")
+		}
+	}
+	cfg.ClientCert = cfg.ServerCert
+	return &cfg, nil
 }

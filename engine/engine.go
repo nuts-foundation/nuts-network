@@ -63,6 +63,8 @@ func flagSet() *pflag.FlagSet {
 	flagSet.String("nodeID", "", "ID of this node. If not set, the node's identity will be used.")
 	flagSet.String("mode", "", "server or client, when client it uses the HttpClient")
 	flagSet.String("address", "", "Interface and port for http server to bind to, defaults to global Nuts address.")
+	flagSet.String("certFile", "", "File containing the certificate the node uses to authenticate itself with.")
+	flagSet.String("certKeyFile", "", "File containing the private key corresponding with the certificate the node uses to authenticate itself with.")
 	return flagSet
 }
 

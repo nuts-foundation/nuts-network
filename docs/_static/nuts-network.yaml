@@ -94,7 +94,6 @@ paths:
               example:
         "404":
           description: "Document (or contents) wasn't found in the document log"
-
 components:
   schemas:
     DocumentWithContents:

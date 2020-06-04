@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"github.com/golang/mock/gomock"
 	"github.com/labstack/echo/v4"
+	"github.com/nuts-foundation/nuts-network/pkg"
 	"github.com/nuts-foundation/nuts-network/pkg/documentlog"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/test"
@@ -46,7 +47,7 @@ func TestApiWrapper_AddDocument(t *testing.T) {
 
 	path := "/document/"
 	t.Run("ok", func(t *testing.T) {
-		var networkClient = test.NewMockNetworkClient(mockCtrl)
+		var networkClient = pkg.NewMockNetworkClient(mockCtrl)
 		e, wrapper := initMockEcho(networkClient)
 		networkClient.EXPECT().AddDocumentWithContents(document.Timestamp, document.Type, documentContents).Return(document, nil)
 
@@ -66,7 +67,7 @@ func TestApiWrapper_AddDocument(t *testing.T) {
 		assert.JSONEq(t, documentAsJSON, rec.Body.String())
 	})
 	t.Run("not found", func(t *testing.T) {
-		var networkClient = test.NewMockNetworkClient(mockCtrl)
+		var networkClient = pkg.NewMockNetworkClient(mockCtrl)
 		e, wrapper := initMockEcho(networkClient)
 		networkClient.EXPECT().GetDocumentContents(gomock.Any()).Return(nil, nil)
 
@@ -90,7 +91,7 @@ func TestApiWrapper_GetDocument(t *testing.T) {
 
 	path := "/document/:hash"
 	t.Run("ok", func(t *testing.T) {
-		var networkClient = test.NewMockNetworkClient(mockCtrl)
+		var networkClient = pkg.NewMockNetworkClient(mockCtrl)
 		e, wrapper := initMockEcho(networkClient)
 		networkClient.EXPECT().GetDocument(test.EqHash(document.Hash)).Return(&document, nil)
 
@@ -107,7 +108,7 @@ func TestApiWrapper_GetDocument(t *testing.T) {
 		assert.JSONEq(t, documentAsJSON, rec.Body.String())
 	})
 	t.Run("not found", func(t *testing.T) {
-		var networkClient = test.NewMockNetworkClient(mockCtrl)
+		var networkClient = pkg.NewMockNetworkClient(mockCtrl)
 		e, wrapper := initMockEcho(networkClient)
 		networkClient.EXPECT().GetDocument(gomock.Any()).Return(nil, nil)
 
@@ -131,7 +132,7 @@ func TestApiWrapper_GetDocumentContents(t *testing.T) {
 
 	path := "/document/:hash/contents"
 	t.Run("ok", func(t *testing.T) {
-		var networkClient = test.NewMockNetworkClient(mockCtrl)
+		var networkClient = pkg.NewMockNetworkClient(mockCtrl)
 		e, wrapper := initMockEcho(networkClient)
 		networkClient.EXPECT().GetDocumentContents(test.EqHash(document.Hash)).Return(documentlog.NoopCloser{Reader: bytes.NewReader(documentContents)}, nil)
 
@@ -148,7 +149,7 @@ func TestApiWrapper_GetDocumentContents(t *testing.T) {
 		assert.Equal(t, "foobar", rec.Body.String())
 	})
 	t.Run("not found", func(t *testing.T) {
-		var networkClient = test.NewMockNetworkClient(mockCtrl)
+		var networkClient = pkg.NewMockNetworkClient(mockCtrl)
 		e, wrapper := initMockEcho(networkClient)
 		networkClient.EXPECT().GetDocumentContents(gomock.Any()).Return(nil, nil)
 
@@ -172,7 +173,7 @@ func TestApiWrapper_ListDocuments(t *testing.T) {
 
 	t.Run("list documents", func(t *testing.T) {
 		t.Run("200", func(t *testing.T) {
-			var networkClient = test.NewMockNetworkClient(mockCtrl)
+			var networkClient = pkg.NewMockNetworkClient(mockCtrl)
 			e, wrapper := initMockEcho(networkClient)
 			networkClient.EXPECT().ListDocuments().Return([]model.Document{document}, nil)
 
@@ -189,7 +190,7 @@ func TestApiWrapper_ListDocuments(t *testing.T) {
 	})
 }
 
-func initMockEcho(networkClient *test.MockNetworkClient) (*echo.Echo, *ServerInterfaceWrapper) {
+func initMockEcho(networkClient *pkg.MockNetworkClient) (*echo.Echo, *ServerInterfaceWrapper) {
 	e := echo.New()
 	stub := ApiWrapper{Service: networkClient}
 	wrapper := &ServerInterfaceWrapper{
