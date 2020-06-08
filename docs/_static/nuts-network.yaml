@@ -9,6 +9,10 @@ paths:
   /api/document:
     get:
       summary: "Lists the documents on the log"
+      description: >
+        Lists all documents on the log. Since this call returns all documents on the log, care should be taken when there
+        are many of them.
+        TODO: By then we'd need a more elaborate querying interface (ranging over timestamps/hashes, pagination, filtering, etc).
       operationId: "listDocuments"
       tags:
         - documents
