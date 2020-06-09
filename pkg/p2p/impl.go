@@ -351,7 +351,6 @@ func (n p2pNetwork) Connect(stream network.Network_ConnectServer) error {
 		remoteAddr = nodeID.String()
 	}
 	peer := &peer{
-		// TODO
 		id:         model.GetPeerID(remoteAddr),
 		nodeID:     nodeID,
 		gate:       stream,

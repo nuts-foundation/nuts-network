@@ -127,7 +127,6 @@ func (dl documentLog) GetDocumentContents(hash model.Hash) (io.ReadCloser, error
 }
 
 func (dl *documentLog) HasDocument(hash model.Hash) bool {
-	// TODO: Implement this without a lock
 	var result bool
 	dl.documentsMutex.ReadLock(func() {
 		result = dl.documentHashIndex[hash.String()] != nil
@@ -136,7 +135,6 @@ func (dl *documentLog) HasDocument(hash model.Hash) bool {
 }
 
 func (dl *documentLog) HasContentsForDocument(hash model.Hash) bool {
-	// TODO: Implement this without a lock
 	var result bool
 	dl.documentsMutex.ReadLock(func() {
 		result = dl.documentHashIndex[hash.String()] != nil && dl.documentHashIndex[hash.String()].contents != nil
@@ -177,7 +175,6 @@ func (dl *documentLog) AddDocument(document model.Document) {
 		dl.entries = append(dl.entries, newEntry)
 		dl.documentHashIndex[newEntry.Hash.String()] = newEntry
 		// TODO: Isn't there a faster way to keep it sorted (or not sort it at all?)
-		// TODO: What if entries have the same timestamp? Use hash for ordering
 		sort.Slice(dl.entries, func(i, j int) bool {
 			if dl.entries[i].Timestamp == dl.entries[j].Timestamp {
 				return dl.entries[i].Timestamp.Before(dl.entries[j].Timestamp)
