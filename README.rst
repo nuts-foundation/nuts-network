@@ -62,7 +62,8 @@ To generate the mocks, run the following commands:
 
 .. code-block:: shell
 
-    ~/go/bin/mockgen -destination=mock/mock_client.go -package=mock -source=pkg/interface.go
+    ~/go/bin/mockgen -destination=test/mock_client.go -package=test -source=pkg/interface.go
+    ~/go/bin/mockgen -destination=test/mock_protocol.go -package=test -source=pkg/proto/interface.go Protocol
 
 Running in Docker
 *****************

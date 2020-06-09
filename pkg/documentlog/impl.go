@@ -22,6 +22,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"github.com/nuts-foundation/nuts-go-core"
 	log "github.com/nuts-foundation/nuts-network/logging"
 	"github.com/nuts-foundation/nuts-network/pkg/concurrency"
@@ -143,9 +144,21 @@ func (dl *documentLog) HasContentsForDocument(hash model.Hash) bool {
 	return result
 }
 
-func (dl *documentLog) AddDocumentWithContents(document model.Document, contents io.Reader) error {
+func (dl *documentLog) AddDocumentWithContents(timestamp time.Time, documentType string, contents io.Reader) (model.Document, error) {
+	buffer := new(bytes.Buffer)
+	if _, err := buffer.ReadFrom(contents); err != nil {
+		return model.Document{}, err
+	}
+	document := model.Document{
+		Hash:      model.CalculateDocumentHash(documentType, timestamp, buffer.Bytes()),
+		Type:      documentType,
+		Timestamp: timestamp,
+	}
+	if dl.HasContentsForDocument(document.Hash) {
+		return model.Document{}, fmt.Errorf("document already exists (with content) for hash: %s", document.Hash)
+	}
 	dl.AddDocument(document)
-	return dl.AddDocumentContents(document.Hash, contents)
+	return dl.AddDocumentContents(document.Hash, buffer)
 }
 
 func (dl *documentLog) AddDocument(document model.Document) {
@@ -196,14 +209,16 @@ func (dl *documentLog) AddDocument(document model.Document) {
 	})
 }
 
-func (dl *documentLog) AddDocumentContents(hash model.Hash, contents io.Reader) error {
+func (dl *documentLog) AddDocumentContents(hash model.Hash, contents io.Reader) (model.Document, error) {
 	var err error
+	var document model.Document
 	dl.documentsMutex.WriteLock(func() {
 		entry := dl.documentHashIndex[hash.String()]
 		if entry == nil {
 			err = ErrUnknownDocument
 			return
 		}
+		document = entry.Document
 		if entry.contents == nil {
 			buffer := new(bytes.Buffer)
 			_, err = buffer.ReadFrom(contents)
@@ -225,7 +240,7 @@ func (dl *documentLog) AddDocumentContents(hash model.Hash, contents io.Reader) 
 			})
 		}
 	})
-	return err
+	return document.Clone(), err
 }
 
 func (dl *documentLog) Documents() []model.Document {

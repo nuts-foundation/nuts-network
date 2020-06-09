@@ -19,10 +19,9 @@
 package api
 
 import (
-	"github.com/magiconair/properties/assert"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/test"
-	assert2 "github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
 )
@@ -51,5 +50,5 @@ func TestDocument_toModel(t *testing.T) {
 		Timestamp: 1591255458635412720,
 		Type:      "test",
 	}
-	assert2.Equal(t, expected, actual.toModel())
+	assert.Equal(t, expected, actual.toModel())
 }

@@ -1,8 +1,8 @@
 package proto
 
 import (
-	"github.com/magiconair/properties/assert"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
+	"github.com/stretchr/testify/assert"
 	"sync"
 	"testing"
 )

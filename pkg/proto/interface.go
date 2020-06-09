@@ -26,6 +26,7 @@ import (
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/pkg/p2p"
 	"io"
+	"time"
 )
 
 const Version = 1
@@ -68,8 +69,8 @@ type HashSource interface {
 	GetDocument(hash model.Hash) *model.Document
 	GetDocumentContents(hash model.Hash) (io.ReadCloser, error)
 	AddDocument(document model.Document)
-	AddDocumentWithContents(document model.Document, contents io.Reader) error
-	AddDocumentContents(hash model.Hash, contents io.Reader) error
+	AddDocumentWithContents(timestamp time.Time, documentType string, contents io.Reader) (model.Document, error)
+	AddDocumentContents(hash model.Hash, contents io.Reader) (model.Document, error)
 }
 
 type AdvertedHashQueue struct {

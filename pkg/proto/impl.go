@@ -225,7 +225,7 @@ func (p *protocol) handleMessage(peerMsg p2p.PeerMessage) error {
 				}
 			}
 		} else {
-			log.Log().Warnf("Peer queried us for document contents, but we don't appear to have it (peer=%s,document=%s)", peer, hash)
+			log.Log().Warnf("Peer queried us for document contents, test.appear to have it (peer=%s,document=%s)", peer, hash)
 		}
 	}
 	if msg.DocumentContents != nil && msg.DocumentContents.Hash != nil && msg.DocumentContents.Contents != nil {
@@ -237,7 +237,7 @@ func (p *protocol) handleMessage(peerMsg p2p.PeerMessage) error {
 		} else if p.hashSource.HasContentsForDocument(hash) {
 			log.Log().Warnf("We already have the contents for the document, ignoring (hash=%s)", hash)
 		} else {
-			if err := p.hashSource.AddDocumentContents(hash, bytes.NewReader(msg.DocumentContents.Contents)); err != nil {
+			if _, err := p.hashSource.AddDocumentContents(hash, bytes.NewReader(msg.DocumentContents.Contents)); err != nil {
 				log.Log().Errorf("Error while writing content for document (hash=%s): %v", hash, err)
 			}
 		}

@@ -123,7 +123,11 @@ type Document struct {
 
 func (d Document) Clone() Document {
 	cp := d
-	cp.Hash = cp.Hash.Clone()
+	if cp.Hash == nil {
+		cp.Hash = nil
+	} else {
+		cp.Hash = cp.Hash.Clone()
+	}
 	return cp
 }
 

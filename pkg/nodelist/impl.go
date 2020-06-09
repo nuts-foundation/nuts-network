@@ -48,12 +48,7 @@ func (n *nodeList) Start(nodeID model.NodeID, publicAddr string) {
 		n.publicAddr = publicAddr
 		log.Log().Infof("Registering local node on nodelist (id=%s,addr=%s)", nodeID, publicAddr)
 		data, _ := json.Marshal(model.NodeInfo{ID: nodeID, Address: publicAddr})
-		document := model.Document{
-			Timestamp: time.Now(),
-			Type:      nodeInfoDocumentType,
-		}
-		document.Hash = model.CalculateDocumentHash(document.Type, document.Timestamp, data)
-		if err := n.documentLog.AddDocumentWithContents(document, bytes.NewReader(data)); err != nil {
+		if _, err := n.documentLog.AddDocumentWithContents(time.Now(), nodeInfoDocumentType, bytes.NewReader(data)); err != nil {
 			// TODO: Shouldn't this be blocking?
 			log.Log().Errorf("Error while adding document with contents: %v", err)
 		}

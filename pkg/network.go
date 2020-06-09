@@ -25,7 +25,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"errors"
 	core "github.com/nuts-foundation/nuts-go-core"
 	log "github.com/nuts-foundation/nuts-network/logging"
 	"github.com/nuts-foundation/nuts-network/pkg/documentlog"
@@ -158,18 +157,7 @@ func (n *Network) ListDocuments() ([]model.Document, error) {
 func (n *Network) AddDocumentWithContents(timestamp time.Time, docType string, contents []byte) (model.Document, error) {
 	log.Log().Infof("Adding document (timestamp=%d,type=%s,content length=%d)", timestamp.UnixNano(), docType, len(contents))
 	// TODO: Validation
-	document := model.Document{
-		Type:      docType,
-		Timestamp: timestamp,
-	}
-	document.Hash = model.CalculateDocumentHash(document.Type, document.Timestamp, contents)
-	if n.documentLog.HasDocument(document.Hash) {
-		return model.Document{}, errors.New("document already exists")
-	}
-	if err := n.documentLog.AddDocumentWithContents(document, bytes.NewReader(contents)); err != nil {
-		return model.Document{}, err
-	}
-	return document, nil
+	return n.documentLog.AddDocumentWithContents(timestamp, docType, bytes.NewReader(contents))
 }
 
 // Shutdown cleans up any leftover go routines
