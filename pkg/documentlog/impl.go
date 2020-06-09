@@ -45,6 +45,7 @@ func NewDocumentLog(protocol proto.Protocol) DocumentLog {
 		documentsMutex:     concurrency.NewSaferRWMutex("doclog-docs"),
 		subscriptions:      make(map[string]documentQueue, 0),
 		subscriptionsMutex: concurrency.NewSaferRWMutex("doclog-subs"),
+		diagnosticsMutex:   concurrency.NewSaferRWMutex("doclog-diag"),
 	}
 }
 
@@ -76,15 +77,20 @@ type documentLog struct {
 	numberOfDocumentsDiagnostic   NumberOfDocumentsDiagnostic
 	lastConsistencyHashDiagnostic LastConsistencyHashDiagnostic
 	consistencyHashListDiagnostic ConsistencyHashListDiagnostic
+	diagnosticsMutex              concurrency.SaferRWMutex
 }
 
 func (dl *documentLog) Diagnostics() []core.DiagnosticResult {
-	return []core.DiagnosticResult{
-		dl.lastConsistencyHashDiagnostic,
-		dl.consistencyHashListDiagnostic,
-		dl.numberOfDocumentsDiagnostic,
-		dl.logSizeDiagnostic,
-	}
+	var results []core.DiagnosticResult
+	dl.diagnosticsMutex.ReadLock(func() {
+		results = []core.DiagnosticResult{
+			dl.lastConsistencyHashDiagnostic,
+			dl.consistencyHashListDiagnostic,
+			dl.numberOfDocumentsDiagnostic,
+			dl.logSizeDiagnostic,
+		}
+	})
+	return results
 }
 
 func (dl *documentLog) Configure(publicAddr string) {
@@ -171,7 +177,6 @@ func (dl *documentLog) AddDocument(document model.Document) {
 			return
 		}
 		newEntry := &entry{Document: document}
-		dl.numberOfDocumentsDiagnostic.NumberOfDocuments++
 		dl.entries = append(dl.entries, newEntry)
 		dl.documentHashIndex[newEntry.Hash.String()] = newEntry
 		// TODO: Isn't there a faster way to keep it sorted (or not sort it at all?)
@@ -201,8 +206,11 @@ func (dl *documentLog) AddDocument(document model.Document) {
 			dl.consistencyHashIndex[prevHash.String()] = dl.entries[i]
 		}
 		dl.lastConsistencyHash.Set(prevHash)
-		dl.lastConsistencyHashDiagnostic.Hash = prevHash.String()
-		dl.consistencyHashListDiagnostic.Hashes = consistencyHashes
+		dl.diagnosticsMutex.WriteLock(func() {
+			dl.numberOfDocumentsDiagnostic.NumberOfDocuments++
+			dl.lastConsistencyHashDiagnostic.Hash = prevHash.String()
+			dl.consistencyHashListDiagnostic.Hashes = consistencyHashes
+		})
 	})
 }
 
@@ -229,7 +237,9 @@ func (dl *documentLog) AddDocumentContents(hash model.Hash, contents io.Reader) 
 				return
 			}
 			entry.contents = &bytes
-			dl.logSizeDiagnostic.add(int64(len(bytes)))
+			dl.diagnosticsMutex.WriteLock(func() {
+				dl.logSizeDiagnostic.sizeInBytes += len(bytes)
+			})
 			dl.subscriptionsMutex.ReadLock(func() {
 				if queue, ok := dl.subscriptions[entry.Type]; ok {
 					queue.internal.Add(entry.Document)

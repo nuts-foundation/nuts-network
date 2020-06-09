@@ -116,3 +116,16 @@ func Test_DocumentLog_AddDocumentContents(t *testing.T) {
 		assert.Error(t, err)
 	})
 }
+
+func Test_DocumentLog_Diagnostics(t *testing.T) {
+	t.Run("ok - test race conditions (run with -race)", func(t *testing.T) {
+		mockCtrl := gomock.NewController(t)
+		defer mockCtrl.Finish()
+		var protocol = test.NewMockProtocol(mockCtrl)
+		log := NewDocumentLog(protocol)
+		go func() {
+			log.AddDocumentWithContents(time.Now(), "test", bytes.NewReader([]byte{1, 2, 3}))
+		}()
+		log.Diagnostics() // this should trigger a race condition if we had no locks
+	})
+}

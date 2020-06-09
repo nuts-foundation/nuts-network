@@ -21,7 +21,6 @@ package documentlog
 import (
 	"fmt"
 	"strings"
-	"sync/atomic"
 )
 
 type LastConsistencyHashDiagnostic struct {
@@ -65,11 +64,7 @@ func (d NumberOfDocumentsDiagnostic) String() string {
 }
 
 type LogSizeDiagnostic struct {
-	sizeInBytes int64
-}
-
-func (d *LogSizeDiagnostic) add(bytes int64) {
-	atomic.AddInt64(&d.sizeInBytes, bytes)
+	sizeInBytes int
 }
 
 func (d LogSizeDiagnostic) Name() string {
@@ -77,6 +72,5 @@ func (d LogSizeDiagnostic) Name() string {
 }
 
 func (d LogSizeDiagnostic) String() string {
-	size := atomic.LoadInt64(&d.sizeInBytes)
-	return fmt.Sprintf("%d", size)
+	return fmt.Sprintf("%d", d.sizeInBytes)
 }
