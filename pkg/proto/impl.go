@@ -44,30 +44,30 @@ type protocol struct {
 
 func (p *protocol) Diagnostics() []core.DiagnosticResult {
 	return []core.DiagnosticResult{
-		p.peerConsistencyHashDiagnostic,
+		&p.peerConsistencyHashDiagnostic,
 	}
 }
 
 func NewProtocol() Protocol {
-	return &protocol{
-		receivedConsistencyHashes: &AdvertedHashQueue{
-			c: make(chan PeerHash, 100), // TODO: Does this number make sense?
-		},
-		receivedDocumentHashes: &AdvertedHashQueue{
-			c: make(chan PeerHash, 1000), // TODO: Does this number make sense?
-		},
+	p := &protocol{
+		receivedConsistencyHashes: &AdvertedHashQueue{},
+		receivedDocumentHashes:    &AdvertedHashQueue{},
 
 		peerHashes:         make(map[model.PeerID]model.Hash),
 		newPeerHashChannel: make(chan PeerHash, 100),
 
-		peerConsistencyHashDiagnostic: peerConsistencyHashDiagnostic{peerHashes: map[model.PeerID]model.Hash{}},
+		peerConsistencyHashDiagnostic: newPeerConsistencyHashDiagnostic(),
 	}
+	// TODO: Does these numbers make sense?
+	p.receivedConsistencyHashes.internal.Init(100)
+	p.receivedDocumentHashes.internal.Init(1000)
+	return p
 }
 
 func (p *protocol) Start(p2pNetwork p2p.P2PNetwork, hashSource HashSource) {
 	p.p2pNetwork = p2pNetwork
 	p.hashSource = hashSource
-	go p.consumeMessages()
+	go p.consumeMessages(p.p2pNetwork.ReceivedMessages())
 	go p.updateDiagnostics()
 }
 
@@ -117,25 +117,16 @@ func (p *protocol) updateDiagnostics() {
 				}
 			}
 			if changed {
-				p.peerConsistencyHashDiagnostic.peerHashes = copyPeerHashMap(p.peerHashes)
+				p.peerConsistencyHashDiagnostic.copyFrom(p.peerHashes)
 			}
 		case peerHash := <-p.newPeerHashChannel:
 			p.peerHashes[peerHash.Peer] = peerHash.Hash
-			p.peerConsistencyHashDiagnostic.peerHashes = copyPeerHashMap(p.peerHashes)
+			p.peerConsistencyHashDiagnostic.copyFrom(p.peerHashes)
 		}
 	}
 }
 
-func copyPeerHashMap(input map[model.PeerID]model.Hash) map[model.PeerID]model.Hash {
-	var output = make(map[model.PeerID]model.Hash, len(input))
-	for k, v := range input {
-		output[k] = v
-	}
-	return output
-}
-
-func (p protocol) consumeMessages() {
-	queue := p.p2pNetwork.ReceivedMessages()
+func (p protocol) consumeMessages(queue p2p.MessageQueue) {
 	for {
 		peerMsg := queue.Get()
 		msg := peerMsg.Message
@@ -163,7 +154,7 @@ func (p *protocol) handleMessage(peerMsg p2p.PeerMessage) error {
 			Hash: msg.AdvertHash.Hash,
 		}
 		p.newPeerHashChannel <- peerHash
-		p.receivedConsistencyHashes.c <- peerHash
+		p.receivedConsistencyHashes.internal.Add(peerHash)
 	}
 	if msg.HashListQuery != nil {
 		log.Log().Debugf("Received hash list query from peer, responding with consistency hash list (peer=%s)", peer)

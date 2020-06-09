@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	grpcPeer "google.golang.org/grpc/peer"
 	"net"
+	"sync"
 	"time"
 )
 
@@ -152,12 +153,13 @@ func (r *remoteNode) connect(config P2PNetworkConfig) (*peer, error) {
 	}
 
 	return &peer{
-		id:     model.GetPeerID(r.NodeInfo.Address),
-		nodeID: r.NodeInfo.ID,
-		conn:   conn,
-		client: client,
-		gate:   gate,
-		addr:   r.NodeInfo.Address,
+		id:         model.GetPeerID(r.NodeInfo.Address),
+		nodeID:     r.NodeInfo.ID,
+		conn:       conn,
+		client:     client,
+		gate:       gate,
+		addr:       r.NodeInfo.Address,
+		closeMutex: &sync.Mutex{},
 	}, nil
 }
 
@@ -254,12 +256,13 @@ func (n p2pNetwork) AddRemoteNode(nodeInfo model.NodeInfo) {
 }
 
 func (n *p2pNetwork) sendAndReceiveForPeer(peer *peer) {
-	go peer.startSending()
+	peer.outMessages = make(chan *network.NetworkMessage, 10) // TODO: Does this number make sense? Should also be configurable?
+	go peer.sendMessages()
 	n.addPeer(peer)
 	// TODO: Check NodeID sent by peer
-	peer.startReceiving(peer, n.receivedMessages)
+	receiveMessages(peer.gate, peer.id, n.receivedMessages)
 	peer.close()
-	// When we reach this line, startReceiving has exited which means the connection has been closed.
+	// When we reach this line, receiveMessages has exited which means the connection has been closed.
 	n.removePeer(peer)
 }
 
@@ -349,10 +352,11 @@ func (n p2pNetwork) Connect(stream network.Network_ConnectServer) error {
 	}
 	peer := &peer{
 		// TODO
-		id:     model.GetPeerID(remoteAddr),
-		nodeID: nodeID,
-		gate:   stream,
-		addr:   remoteAddr,
+		id:         model.GetPeerID(remoteAddr),
+		nodeID:     nodeID,
+		gate:       stream,
+		addr:       remoteAddr,
+		closeMutex: &sync.Mutex{},
 	}
 	n.sendAndReceiveForPeer(peer)
 	return nil

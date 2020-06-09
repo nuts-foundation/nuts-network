@@ -20,6 +20,7 @@ package nodelist
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	log "github.com/nuts-foundation/nuts-network/logging"
@@ -32,9 +33,11 @@ import (
 const nodeInfoDocumentType = "node-info"
 
 type nodeList struct {
-	documents  documentlog.DocumentLog
-	p2pNetwork p2p.P2PNetwork
-	publicAddr string
+	documentLog documentlog.DocumentLog
+	p2pNetwork  p2p.P2PNetwork
+	publicAddr  string
+	cxt         context.Context
+	cxtCancel   context.CancelFunc
 }
 
 func (n *nodeList) Start(nodeID model.NodeID, publicAddr string) {
@@ -50,23 +53,28 @@ func (n *nodeList) Start(nodeID model.NodeID, publicAddr string) {
 			Type:      nodeInfoDocumentType,
 		}
 		document.Hash = model.CalculateDocumentHash(document.Type, document.Timestamp, data)
-		if err := n.documents.AddDocumentWithContents(document, bytes.NewReader(data)); err != nil {
+		if err := n.documentLog.AddDocumentWithContents(document, bytes.NewReader(data)); err != nil {
 			// TODO: Shouldn't this be blocking?
 			log.Log().Errorf("Error while adding document with contents: %v", err)
 		}
 	}
-	documentQueue := n.documents.Subscribe(nodeInfoDocumentType)
+	n.cxt, n.cxtCancel = context.WithCancel(context.Background())
+
+	documentQueue := n.documentLog.Subscribe(nodeInfoDocumentType)
 	go n.consumeNodeInfoFromQueue(documentQueue)
 }
 
 func (n nodeList) Stop() {
-	// TODO: stop loops
+	n.cxtCancel()
 }
 
 func (n *nodeList) consumeNodeInfoFromQueue(queue documentlog.DocumentQueue) {
-	// TODO: When to cancel?
 	for {
-		document := queue.Get()
+		document, err := queue.Get(n.cxt)
+		if err != nil {
+			log.Log().Debugf("Get cancelled: %v", err)
+			return
+		}
 		if err := n.consumeNodeInfo(document); err != nil {
 			log.Log().Errorf("Error while processing nodelist document (hash=%s): %v", document.Hash, err)
 		}
@@ -75,7 +83,7 @@ func (n *nodeList) consumeNodeInfoFromQueue(queue documentlog.DocumentQueue) {
 
 func (n *nodeList) consumeNodeInfo(document model.Document) error {
 	nodeInfo := model.NodeInfo{}
-	reader, err := n.documents.GetDocumentContents(document.Hash)
+	reader, err := n.documentLog.GetDocumentContents(document.Hash)
 	if err != nil {
 		return err
 	}

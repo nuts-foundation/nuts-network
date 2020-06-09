@@ -25,6 +25,7 @@ import (
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"google.golang.org/grpc"
 	"io"
+	"sync"
 )
 
 type messageGate interface {
@@ -47,6 +48,8 @@ type peer struct {
 	//   According to the docs it's unsafe to simultaneously call stream.Send() from multiple goroutines so we put them
 	//   on a channel so that each peer can have its own goroutine sending messages (consuming messages from this channel)
 	outMessages chan *network.NetworkMessage
+	// closeMutex the close() function since race conditions can trigger panics
+	closeMutex *sync.Mutex
 }
 
 func (p peer) String() string {
@@ -54,6 +57,8 @@ func (p peer) String() string {
 }
 
 func (p *peer) close() {
+	p.closeMutex.Lock()
+	defer p.closeMutex.Unlock()
 	if p.conn != nil {
 		if err := p.conn.Close(); err != nil {
 			log.Log().Errorf("Unable to close client connection (peer=%s): %v", p, err)
@@ -67,12 +72,13 @@ func (p *peer) close() {
 }
 
 func (p *peer) send(message *network.NetworkMessage) {
+	p.closeMutex.Lock()
+	defer p.closeMutex.Unlock()
 	p.outMessages <- message
 }
 
-// startSending (blocking) reads messages from its outMessages channel and sends them to the peer until the channel is closed.
-func (p *peer) startSending() {
-	p.outMessages = make(chan *network.NetworkMessage, 10) // TODO: Does this number make sense? Should also be configurable?
+// sendMessages (blocking) reads messages from its outMessages channel and sends them to the peer until the channel is closed.
+func (p peer) sendMessages() {
 	for message := range p.outMessages {
 		if p.gate.Send(message) != nil {
 			log.Log().Errorf("Unable to broadcast message to peer (peer=%s)", p.id)
@@ -80,21 +86,21 @@ func (p *peer) startSending() {
 	}
 }
 
-// startReceiving (blocking) reads messages from the peer until it disconnects or the network is stopped.
-func (p *peer) startReceiving(peer *peer, queue messageQueue) {
+// receiveMessages (blocking) reads messages from the peer until it disconnects or the network is stopped.
+func receiveMessages(gate messageGate, peerId model.PeerID, receivedMsgQueue messageQueue) {
 	for {
-		msg, recvErr := peer.gate.Recv()
+		msg, recvErr := gate.Recv()
 		if recvErr != nil {
 			if recvErr == io.EOF {
-				log.Log().Infof("Peer closed connection: %s", peer)
+				log.Log().Infof("Peer closed connection: %s", peerId)
 			} else {
-				log.Log().Errorf("Peer connection error (peer=%s): %v", peer, recvErr)
+				log.Log().Errorf("Peer connection error (peer=%s): %v", peerId, recvErr)
 			}
 			break
 		}
-		log.Log().Tracef("Received message from peer (%s): %s", peer, msg.String())
-		queue.c <- PeerMessage{
-			Peer:    peer.id,
+		log.Log().Tracef("Received message from peer (%s): %s", peerId, msg.String())
+		receivedMsgQueue.c <- PeerMessage{
+			Peer:    peerId,
 			Message: msg,
 		}
 	}

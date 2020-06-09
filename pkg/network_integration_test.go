@@ -113,19 +113,15 @@ func addDocumentAndWaitForItToArrive(t *testing.T, sender *Network, receiver *Ne
 	if !assert.NoError(t, err) {
 		return true
 	}
-	var receivedDocument *model.Document
-	go func() {
-		d := receiverSub.Get()
-		receivedDocument = &d
-	}()
-	if !waitFor(t, func() (bool, error) {
-		return receivedDocument != nil, nil
-	}, defaultTimeout) {
-		return true
+	var receivedDocument model.Document
+	cxt, _ := context.WithTimeout(context.Background(), defaultTimeout)
+	receivedDocument, err = receiverSub.Get(cxt)
+	if !assert.NoError(t, err) {
+		return false
 	}
 	addedDocument.Timestamp = addedDocument.Timestamp.UTC()
 	receivedDocument.Timestamp = receivedDocument.Timestamp.UTC()
-	assert.Equal(t, addedDocument, *receivedDocument)
+	assert.Equal(t, addedDocument, receivedDocument)
 	return false
 }
 

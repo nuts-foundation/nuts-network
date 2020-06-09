@@ -19,7 +19,9 @@
 package documentlog
 
 import (
+	"context"
 	core "github.com/nuts-foundation/nuts-go-core"
+	"github.com/nuts-foundation/nuts-network/pkg/concurrency"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/pkg/proto"
 )
@@ -34,15 +36,26 @@ type DocumentLog interface {
 	Diagnostics() []core.DiagnosticResult
 }
 
+// DocumentQueue is a blocking queue which allows callers to wait for documents to come in.
 type DocumentQueue interface {
-	Get() model.Document
+	// Get gets a document from the queue. It blocks until:
+	// - There's a document to return
+	// - The context is cancelled or expires
+	// - The queue is closed by the producer
+	// When the queue is closed this function an error and no document.
+	Get(context context.Context) (model.Document, error)
 }
 
 type documentQueue struct {
+	internal     concurrency.Queue
 	documentType string
-	c            chan model.Document
 }
 
-func (q documentQueue) Get() model.Document {
-	return <-q.c
+func (q documentQueue) Get(cxt context.Context) (model.Document, error) {
+	item, err := q.internal.Get(cxt)
+	if err != nil {
+		return model.Document{}, err
+	} else {
+		return item.(model.Document), nil
+	}
 }

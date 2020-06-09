@@ -23,19 +23,30 @@ import (
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"sort"
 	"strings"
+	"sync"
 )
 
-type peerConsistencyHashDiagnostic struct {
-	peerHashes map[model.PeerID]model.Hash
+func newPeerConsistencyHashDiagnostic() peerConsistencyHashDiagnostic {
+	return peerConsistencyHashDiagnostic{
+		peerHashes: new(map[model.PeerID]model.Hash),
+		mux:        &sync.Mutex{},
+	}
 }
 
-func (p peerConsistencyHashDiagnostic) Name() string {
+type peerConsistencyHashDiagnostic struct {
+	peerHashes *map[model.PeerID]model.Hash
+	mux        *sync.Mutex
+}
+
+func (d peerConsistencyHashDiagnostic) Name() string {
 	return "[Protocol] Peer hashes"
 }
 
-func (p peerConsistencyHashDiagnostic) String() string {
+func (d peerConsistencyHashDiagnostic) String() string {
+	d.mux.Lock()
+	defer d.mux.Unlock()
 	var groupedByHash = make(map[string][]string)
-	for peer, hash := range p.peerHashes {
+	for peer, hash := range *d.peerHashes {
 		groupedByHash[hash.String()] = append(groupedByHash[hash.String()], string(peer))
 	}
 	var items []string
@@ -51,4 +62,14 @@ func (p peerConsistencyHashDiagnostic) String() string {
 		return items[i] > items[j]
 	})
 	return strings.Join(items, ", ")
+}
+
+func (d peerConsistencyHashDiagnostic) copyFrom(input map[model.PeerID]model.Hash) {
+	d.mux.Lock()
+	defer d.mux.Unlock()
+	var newMap = make(map[model.PeerID]model.Hash, len(input))
+	for k, v := range input {
+		newMap[k] = v
+	}
+	*d.peerHashes = newMap
 }

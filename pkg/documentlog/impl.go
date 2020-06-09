@@ -20,6 +20,7 @@ package documentlog
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"github.com/nuts-foundation/nuts-go-core"
 	log "github.com/nuts-foundation/nuts-network/logging"
@@ -38,13 +39,11 @@ var ErrUnknownDocument = errors.New("unknown document")
 
 func NewDocumentLog(protocol proto.Protocol) DocumentLog {
 	return &documentLog{
-		protocol:            protocol,
-		lastConsistencyHash: model.EmptyHash(),
-		documents:           make([]model.Document, 0),
-		documentHashIndex:   make(map[string]*entry, 0),
-		documentsMutex:      concurrency.NewSaferRWMutex("doclog-docs"),
-		subscriptions:       make([]documentQueue, 0),
-		subscriptionsMutex:  concurrency.NewSaferRWMutex("doclog-subs"),
+		protocol:           protocol,
+		documentHashIndex:  make(map[string]*entry, 0),
+		documentsMutex:     concurrency.NewSaferRWMutex("doclog-docs"),
+		subscriptions:      make(map[string]documentQueue, 0),
+		subscriptionsMutex: concurrency.NewSaferRWMutex("doclog-subs"),
 	}
 }
 
@@ -60,16 +59,16 @@ type documentLog struct {
 	entries []*entry
 	// documentHashIndex contains the entries indexed by document hash
 	documentHashIndex map[string]*entry
-	// documents contains the list of all documents
-	documents []model.Document
 	// consistencyHashIndex contains the entries indexed by consistency hash
 	consistencyHashIndex map[string]*entry
 	documentsMutex       concurrency.SaferRWMutex
-	lastConsistencyHash  model.Hash
+	lastConsistencyHash  model.AtomicHash
 	advertHashTimer      *time.Ticker
-	subscriptions        []documentQueue
+	subscriptions        map[string]documentQueue
 	subscriptionsMutex   concurrency.SaferRWMutex
 	publicAddr           string
+	cxt                  context.Context
+	cxtCancel            context.CancelFunc
 
 	// keep diagnostic state separate from source data (share-nothing) to avoid concurrent access
 	logSizeDiagnostic             LogSizeDiagnostic
@@ -92,12 +91,10 @@ func (dl *documentLog) Configure(publicAddr string) {
 }
 
 func (dl *documentLog) Subscribe(documentType string) DocumentQueue {
-	queue := documentQueue{
-		documentType: documentType,
-		c:            make(chan model.Document, 100), // TODO: Does this number make sense?
-	}
+	queue := documentQueue{documentType: documentType}
+	queue.internal.Init(100) // TODO: Does this number make sense?
 	dl.subscriptionsMutex.WriteLock(func() {
-		dl.subscriptions = append(dl.subscriptions, queue)
+		dl.subscriptions[documentType] = queue
 	})
 	return &queue
 }
@@ -193,10 +190,9 @@ func (dl *documentLog) AddDocument(document model.Document) {
 			consistencyHashes[i] = prevHash.String()
 			dl.consistencyHashIndex[prevHash.String()] = dl.entries[i]
 		}
-		dl.lastConsistencyHash = prevHash
-		dl.lastConsistencyHashDiagnostic.Hash = dl.lastConsistencyHash.String()
+		dl.lastConsistencyHash.Set(prevHash)
+		dl.lastConsistencyHashDiagnostic.Hash = prevHash.String()
 		dl.consistencyHashListDiagnostic.Hashes = consistencyHashes
-		dl.documents = documents
 	})
 }
 
@@ -221,12 +217,10 @@ func (dl *documentLog) AddDocumentContents(hash model.Hash, contents io.Reader) 
 				return
 			}
 			entry.contents = &bytes
-			dl.logSizeDiagnostic.SizeInBytes += len(bytes)
+			dl.logSizeDiagnostic.add(int64(len(bytes)))
 			dl.subscriptionsMutex.ReadLock(func() {
-				for _, sub := range dl.subscriptions {
-					if sub.documentType == entry.Type {
-						sub.c <- entry.Document
-					}
+				if queue, ok := dl.subscriptions[entry.Type]; ok {
+					queue.internal.Add(entry.Document)
 				}
 			})
 		}
@@ -235,7 +229,13 @@ func (dl *documentLog) AddDocumentContents(hash model.Hash, contents io.Reader) 
 }
 
 func (dl *documentLog) Documents() []model.Document {
-	return dl.documents
+	var result []model.Document
+	dl.documentsMutex.ReadLock(func() {
+		for _, entry := range dl.entries {
+			result = append(result, entry.Document.Clone())
+		}
+	})
+	return result
 }
 
 func (dl *documentLog) Stop() {
@@ -244,19 +244,20 @@ func (dl *documentLog) Stop() {
 }
 
 func (dl *documentLog) Start() {
+	dl.cxt, dl.cxtCancel = context.WithCancel(context.Background())
 	dl.advertHashTimer = time.NewTicker(AdvertHashInterval)
 	go dl.advertHash()
-	go dl.resolveAdvertedHashes()
+	go dl.resolveAdvertedHashes(dl.protocol.ReceivedConsistencyHashes())
 }
 
-// TODO: Comment
-// resolveAdvertedHashes reads
-func (dl *documentLog) resolveAdvertedHashes() {
-	// TODO: When to quite the loop?
-	queue := dl.protocol.ReceivedConsistencyHashes()
+func (dl *documentLog) resolveAdvertedHashes(queue proto.PeerHashQueue) {
 	for {
-		peerHash := queue.Get()
-		log.Log().Debugf("Got consistency hash (ours: %s, received: %s)", dl.lastConsistencyHash.String(), peerHash.Hash.String())
+		peerHash, err := queue.Get(dl.cxt)
+		if err != nil {
+			log.Log().Debugf("Get cancelled: %v", err)
+			return
+		}
+		log.Log().Debugf("Got consistency hash: %s", peerHash.Hash.String())
 		var entry *entry
 		dl.documentsMutex.ReadLock(func() {
 			entry = dl.consistencyHashIndex[peerHash.Hash.String()]
@@ -276,9 +277,10 @@ func (dl *documentLog) resolveAdvertedHashes() {
 func (dl *documentLog) advertHash() {
 	for {
 		<-dl.advertHashTimer.C
-		if !dl.lastConsistencyHash.Empty() {
-			log.Log().Debugf("Adverting last hash (%s)", dl.lastConsistencyHash)
-			dl.protocol.AdvertConsistencyHash(dl.lastConsistencyHash)
+		hash := dl.lastConsistencyHash.Get()
+		if !hash.Empty() {
+			log.Log().Debugf("Adverting last hash (%s)", hash)
+			dl.protocol.AdvertConsistencyHash(hash)
 		}
 	}
 }

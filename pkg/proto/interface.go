@@ -19,8 +19,10 @@
 package proto
 
 import (
+	"context"
 	"errors"
 	core "github.com/nuts-foundation/nuts-go-core"
+	"github.com/nuts-foundation/nuts-network/pkg/concurrency"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/pkg/p2p"
 	"io"
@@ -50,8 +52,7 @@ type Protocol interface {
 // the hashes represent append-only data structures which means the last one is most recent.
 type PeerHashQueue interface {
 	// Get blocks until there's an PeerHash available and returns it.
-	// TODO: Cancellation?
-	Get() PeerHash
+	Get(cxt context.Context) (PeerHash, error)
 }
 
 type PeerHash struct {
@@ -72,9 +73,14 @@ type HashSource interface {
 }
 
 type AdvertedHashQueue struct {
-	c chan PeerHash
+	internal concurrency.Queue
 }
 
-func (q AdvertedHashQueue) Get() PeerHash {
-	return <-q.c
+func (q AdvertedHashQueue) Get(cxt context.Context) (PeerHash, error) {
+	item, err := q.internal.Get(cxt)
+	if err != nil {
+		return PeerHash{}, err
+	} else {
+		return item.(PeerHash), nil
+	}
 }
