@@ -24,7 +24,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"sync"
 	"time"
 )
 
@@ -58,24 +57,6 @@ func (h Hash) Equals(other Hash) bool {
 
 func (h Hash) String() string {
 	return hex.EncodeToString(h)
-}
-
-// AtomicHash is an atomic hash container which synchronises read and write access.
-type AtomicHash struct {
-	h   Hash
-	mux sync.RWMutex
-}
-
-func (a *AtomicHash) Get() Hash {
-	a.mux.RLock()
-	defer a.mux.RUnlock()
-	return a.h.Clone()
-}
-
-func (a *AtomicHash) Set(h Hash) {
-	a.mux.Lock()
-	defer a.mux.Unlock()
-	a.h = h
 }
 
 func ParseHash(input string) (Hash, error) {

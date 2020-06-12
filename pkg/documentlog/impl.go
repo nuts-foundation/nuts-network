@@ -23,13 +23,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/nuts-foundation/nuts-go-core"
 	log "github.com/nuts-foundation/nuts-network/logging"
 	"github.com/nuts-foundation/nuts-network/pkg/concurrency"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/pkg/proto"
+	"github.com/nuts-foundation/nuts-network/pkg/stats"
 	"io"
 	"sort"
+	"sync/atomic"
 	"time"
 )
 
@@ -40,12 +41,13 @@ var ErrUnknownDocument = errors.New("unknown document")
 
 func NewDocumentLog(protocol proto.Protocol) DocumentLog {
 	return &documentLog{
-		protocol:           protocol,
-		documentHashIndex:  make(map[string]*entry, 0),
-		documentsMutex:     concurrency.NewSaferRWMutex("doclog-docs"),
-		subscriptions:      make(map[string]documentQueue, 0),
-		subscriptionsMutex: concurrency.NewSaferRWMutex("doclog-subs"),
-		diagnosticsMutex:   concurrency.NewSaferRWMutex("doclog-diag"),
+		protocol:            protocol,
+		documentHashIndex:   make(map[string]*entry, 0),
+		documentsMutex:      concurrency.NewSaferRWMutex("doclog-docs"),
+		subscriptions:       make(map[string]documentQueue, 0),
+		subscriptionsMutex:  concurrency.NewSaferRWMutex("doclog-subs"),
+		statisticsMutex:     concurrency.NewSaferRWMutex("doclog-stats"),
+		lastConsistencyHash: &atomic.Value{},
 	}
 }
 
@@ -64,7 +66,7 @@ type documentLog struct {
 	// consistencyHashIndex contains the entries indexed by consistency hash
 	consistencyHashIndex map[string]*entry
 	documentsMutex       concurrency.SaferRWMutex
-	lastConsistencyHash  model.AtomicHash
+	lastConsistencyHash  *atomic.Value
 	advertHashTimer      *time.Ticker
 	subscriptions        map[string]documentQueue
 	subscriptionsMutex   concurrency.SaferRWMutex
@@ -72,22 +74,22 @@ type documentLog struct {
 	cxt                  context.Context
 	cxtCancel            context.CancelFunc
 
-	// keep diagnostic state separate from source data (share-nothing) to avoid concurrent access
-	logSizeDiagnostic             LogSizeDiagnostic
-	numberOfDocumentsDiagnostic   NumberOfDocumentsDiagnostic
-	lastConsistencyHashDiagnostic LastConsistencyHashDiagnostic
-	consistencyHashListDiagnostic ConsistencyHashListDiagnostic
-	diagnosticsMutex              concurrency.SaferRWMutex
+	// keep statistic state separate from source data (share-nothing) to avoid concurrent access
+	logSizeStatistics            LogSizeStatistic
+	numberOfDocumentsStatistic   NumberOfDocumentsStatistic
+	lastConsistencyHashStatistic LastConsistencyHashStatistic
+	consistencyHashListStatistic ConsistencyHashListStatistic
+	statisticsMutex              concurrency.SaferRWMutex
 }
 
-func (dl *documentLog) Diagnostics() []core.DiagnosticResult {
-	var results []core.DiagnosticResult
-	dl.diagnosticsMutex.ReadLock(func() {
-		results = []core.DiagnosticResult{
-			dl.lastConsistencyHashDiagnostic,
-			dl.consistencyHashListDiagnostic,
-			dl.numberOfDocumentsDiagnostic,
-			dl.logSizeDiagnostic,
+func (dl *documentLog) Statistics() []stats.Statistic {
+	var results []stats.Statistic
+	dl.statisticsMutex.ReadLock(func() {
+		results = []stats.Statistic{
+			dl.lastConsistencyHashStatistic,
+			dl.consistencyHashListStatistic,
+			dl.numberOfDocumentsStatistic,
+			dl.logSizeStatistics,
 		}
 	})
 	return results
@@ -205,11 +207,11 @@ func (dl *documentLog) AddDocument(document model.Document) {
 			consistencyHashes[i] = prevHash.String()
 			dl.consistencyHashIndex[prevHash.String()] = dl.entries[i]
 		}
-		dl.lastConsistencyHash.Set(prevHash)
-		dl.diagnosticsMutex.WriteLock(func() {
-			dl.numberOfDocumentsDiagnostic.NumberOfDocuments++
-			dl.lastConsistencyHashDiagnostic.Hash = prevHash.String()
-			dl.consistencyHashListDiagnostic.Hashes = consistencyHashes
+		dl.lastConsistencyHash.Store(prevHash)
+		dl.statisticsMutex.WriteLock(func() {
+			dl.numberOfDocumentsStatistic.NumberOfDocuments++
+			dl.lastConsistencyHashStatistic.Hash = prevHash.String()
+			dl.consistencyHashListStatistic.Hashes = consistencyHashes
 		})
 	})
 }
@@ -237,8 +239,8 @@ func (dl *documentLog) AddDocumentContents(hash model.Hash, contents io.Reader) 
 				return
 			}
 			entry.contents = &bytes
-			dl.diagnosticsMutex.WriteLock(func() {
-				dl.logSizeDiagnostic.sizeInBytes += len(bytes)
+			dl.statisticsMutex.WriteLock(func() {
+				dl.logSizeStatistics.sizeInBytes += len(bytes)
 			})
 			dl.subscriptionsMutex.ReadLock(func() {
 				if queue, ok := dl.subscriptions[entry.Type]; ok {
@@ -299,10 +301,12 @@ func (dl *documentLog) resolveAdvertedHashes(queue proto.PeerHashQueue) {
 func (dl *documentLog) advertHash() {
 	for {
 		<-dl.advertHashTimer.C
-		hash := dl.lastConsistencyHash.Get()
-		if !hash.Empty() {
+		hash, ok := dl.lastConsistencyHash.Load().(model.Hash)
+		if ok && !hash.Empty() {
 			log.Log().Debugf("Adverting last hash (%s)", hash)
 			dl.protocol.AdvertConsistencyHash(hash)
+		} else if !ok {
+			log.Log().Error("lastConsistencyHash doesn't contain instance of model.Hash!")
 		}
 	}
 }

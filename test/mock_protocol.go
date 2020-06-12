@@ -7,8 +7,8 @@ package test
 import (
 	context "context"
 	gomock "github.com/golang/mock/gomock"
-	core "github.com/nuts-foundation/nuts-go-core"
 	model "github.com/nuts-foundation/nuts-network/pkg/model"
+	stats "github.com/nuts-foundation/nuts-network/pkg/stats"
 	p2p "github.com/nuts-foundation/nuts-network/pkg/p2p"
 	proto "github.com/nuts-foundation/nuts-network/pkg/proto"
 	io "io"
@@ -117,18 +117,18 @@ func (mr *MockProtocolMockRecorder) QueryHashList(peer interface{}) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryHashList", reflect.TypeOf((*MockProtocol)(nil).QueryHashList), peer)
 }
 
-// Diagnostics mocks base method
-func (m *MockProtocol) Diagnostics() []core.DiagnosticResult {
+// Statistics mocks base method
+func (m *MockProtocol) Statistics() []stats.Statistic {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Diagnostics")
-	ret0, _ := ret[0].([]core.DiagnosticResult)
+	ret := m.ctrl.Call(m, "Statistics")
+	ret0, _ := ret[0].([]stats.Statistic)
 	return ret0
 }
 
-// Diagnostics indicates an expected call of Diagnostics
-func (mr *MockProtocolMockRecorder) Diagnostics() *gomock.Call {
+// Statistics indicates an expected call of Statistics
+func (mr *MockProtocolMockRecorder) Statistics() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Diagnostics", reflect.TypeOf((*MockProtocol)(nil).Diagnostics))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Statistics", reflect.TypeOf((*MockProtocol)(nil).Statistics))
 }
 
 // MockPeerHashQueue is a mock of PeerHashQueue interface

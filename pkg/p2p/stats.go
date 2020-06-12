@@ -24,27 +24,27 @@ import (
 	"strings"
 )
 
-type NumberOfDiagnosticsResult struct {
+type NumberOfPeersStatistic struct {
 	NumberOfPeers int
 }
 
-func (n NumberOfDiagnosticsResult) Name() string {
+func (n NumberOfPeersStatistic) Name() string {
 	return "[P2P Network] Connected peers #"
 }
 
-func (n NumberOfDiagnosticsResult) String() string {
+func (n NumberOfPeersStatistic) String() string {
 	return fmt.Sprintf("%d", n.NumberOfPeers)
 }
 
-type PeersDiagnosticsResult struct {
+type PeersStatistic struct {
 	Peers []Peer
 }
 
-func (p PeersDiagnosticsResult) Name() string {
+func (p PeersStatistic) Name() string {
 	return "[P2P Network] Connected peers"
 }
 
-func (p PeersDiagnosticsResult) String() string {
+func (p PeersStatistic) String() string {
 	addrs := make([]string, len(p.Peers))
 	for i, peer := range p.Peers {
 		addrs[i] = peer.String()

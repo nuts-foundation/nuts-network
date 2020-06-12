@@ -26,23 +26,23 @@ import (
 	"sync"
 )
 
-func newPeerConsistencyHashDiagnostic() peerConsistencyHashDiagnostic {
-	return peerConsistencyHashDiagnostic{
+func newPeerConsistencyHashStatistic() peerConsistencyHashStatistic {
+	return peerConsistencyHashStatistic{
 		peerHashes: new(map[model.PeerID]model.Hash),
 		mux:        &sync.Mutex{},
 	}
 }
 
-type peerConsistencyHashDiagnostic struct {
+type peerConsistencyHashStatistic struct {
 	peerHashes *map[model.PeerID]model.Hash
 	mux        *sync.Mutex
 }
 
-func (d peerConsistencyHashDiagnostic) Name() string {
+func (d peerConsistencyHashStatistic) Name() string {
 	return "[Protocol] Peer hashes"
 }
 
-func (d peerConsistencyHashDiagnostic) String() string {
+func (d peerConsistencyHashStatistic) String() string {
 	d.mux.Lock()
 	defer d.mux.Unlock()
 	var groupedByHash = make(map[string][]string)
@@ -64,7 +64,7 @@ func (d peerConsistencyHashDiagnostic) String() string {
 	return strings.Join(items, ", ")
 }
 
-func (d peerConsistencyHashDiagnostic) copyFrom(input map[model.PeerID]model.Hash) {
+func (d peerConsistencyHashStatistic) copyFrom(input map[model.PeerID]model.Hash) {
 	d.mux.Lock()
 	defer d.mux.Unlock()
 	var newMap = make(map[model.PeerID]model.Hash, len(input))

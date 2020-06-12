@@ -32,6 +32,7 @@ import (
 	"github.com/nuts-foundation/nuts-network/pkg/nodelist"
 	"github.com/nuts-foundation/nuts-network/pkg/p2p"
 	"github.com/nuts-foundation/nuts-network/pkg/proto"
+	"github.com/nuts-foundation/nuts-network/pkg/stats"
 	"io"
 	"math/big"
 	"strings"
@@ -171,10 +172,15 @@ func (n *Network) Shutdown() error {
 }
 
 func (n *Network) Diagnostics() []core.DiagnosticResult {
-	var result = make([]core.DiagnosticResult, 0)
-	result = append(result, n.documentLog.Diagnostics()...)
-	result = append(result, n.protocol.Diagnostics()...)
-	result = append(result, n.p2pNetwork.Diagnostics()...)
+	var statistics = make([]stats.Statistic, 0)
+	statistics = append(statistics, n.documentLog.Statistics()...)
+	statistics = append(statistics, n.protocol.Statistics()...)
+	statistics = append(statistics, n.p2pNetwork.Statistics()...)
+	var result = make([]core.DiagnosticResult, len(statistics))
+	// Hey that's convenient, stats.Statistic matches core.DiagnosticResult!
+	for i, statistic := range statistics {
+		result[i] = statistic
+	}
 	return result
 }
 

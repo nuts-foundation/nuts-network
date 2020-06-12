@@ -23,11 +23,11 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/nuts-foundation/nuts-go-core"
 	log "github.com/nuts-foundation/nuts-network/logging"
 	"github.com/nuts-foundation/nuts-network/network"
 	"github.com/nuts-foundation/nuts-network/pkg/concurrency"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
+	"github.com/nuts-foundation/nuts-network/pkg/stats"
 	errors2 "github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -60,11 +60,11 @@ type p2pNetwork struct {
 	peerDialer       Dialer
 }
 
-func (n p2pNetwork) Diagnostics() []core.DiagnosticResult {
+func (n p2pNetwork) Statistics() []stats.Statistic {
 	peers := n.Peers()
-	return []core.DiagnosticResult{
-		NumberOfDiagnosticsResult{NumberOfPeers: len(peers)},
-		PeersDiagnosticsResult{Peers: peers},
+	return []stats.Statistic{
+		NumberOfPeersStatistic{NumberOfPeers: len(peers)},
+		PeersStatistic{Peers: peers},
 	}
 }
 

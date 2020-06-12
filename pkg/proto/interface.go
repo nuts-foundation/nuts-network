@@ -21,10 +21,10 @@ package proto
 import (
 	"context"
 	"errors"
-	core "github.com/nuts-foundation/nuts-go-core"
 	"github.com/nuts-foundation/nuts-network/pkg/concurrency"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/pkg/p2p"
+	"github.com/nuts-foundation/nuts-network/pkg/stats"
 	"io"
 	"time"
 )
@@ -36,6 +36,7 @@ var ErrMissingProtocolVersion = errors.New("missing protocol version")
 var ErrUnsupportedProtocolVersion = errors.New("unsupported protocol version")
 
 type Protocol interface {
+	stats.StatsProvider
 	// TODO: This feels like poor man's dependency injection... We need a design pattern here.
 	Start(p2pNetwork p2p.P2PNetwork, source HashSource)
 	Stop()
@@ -45,8 +46,6 @@ type Protocol interface {
 
 	AdvertConsistencyHash(hash model.Hash)
 	QueryHashList(peer model.PeerID) error
-
-	Diagnostics() []core.DiagnosticResult
 }
 
 // PeerHashQueue is a queue which contains the hashes adverted by our peers. It's a FILO queue, since

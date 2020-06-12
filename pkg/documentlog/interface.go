@@ -20,20 +20,19 @@ package documentlog
 
 import (
 	"context"
-	core "github.com/nuts-foundation/nuts-go-core"
 	"github.com/nuts-foundation/nuts-network/pkg/concurrency"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/pkg/proto"
+	"github.com/nuts-foundation/nuts-network/pkg/stats"
 )
 
 type DocumentLog interface {
 	proto.HashSource
+	stats.StatsProvider
 	// Starts the document log
 	Start()
 	Stop()
 	Subscribe(documentType string) DocumentQueue // TODO: Subscribe is a bad name when returning a blocking queue
-
-	Diagnostics() []core.DiagnosticResult
 }
 
 // DocumentQueue is a blocking queue which allows callers to wait for documents to come in.

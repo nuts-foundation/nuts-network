@@ -21,12 +21,13 @@ package p2p
 import (
 	"crypto/tls"
 	"fmt"
-	core "github.com/nuts-foundation/nuts-go-core"
 	"github.com/nuts-foundation/nuts-network/network"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
+	"github.com/nuts-foundation/nuts-network/pkg/stats"
 )
 
 type P2PNetwork interface {
+	stats.StatsProvider
 	// Start starts the P2P network on the local node.
 	Start(config P2PNetworkConfig) error
 	// Stop stops the P2P network on the local node.
@@ -38,7 +39,6 @@ type P2PNetwork interface {
 	Broadcast(message *network.NetworkMessage)
 	// Peers returns the peers we're currently connected to
 	Peers() []Peer
-	Diagnostics() []core.DiagnosticResult
 }
 
 type MessageQueue interface {

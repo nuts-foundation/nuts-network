@@ -23,27 +23,27 @@ import (
 	"strings"
 )
 
-type LastConsistencyHashDiagnostic struct {
+type LastConsistencyHashStatistic struct {
 	Hash string
 }
 
-func (d LastConsistencyHashDiagnostic) Name() string {
+func (d LastConsistencyHashStatistic) Name() string {
 	return "[DocumentLog] Last consistency hash"
 }
 
-func (d LastConsistencyHashDiagnostic) String() string {
+func (d LastConsistencyHashStatistic) String() string {
 	return d.Hash
 }
 
-type ConsistencyHashListDiagnostic struct {
+type ConsistencyHashListStatistic struct {
 	Hashes []string
 }
 
-func (d ConsistencyHashListDiagnostic) Name() string {
+func (d ConsistencyHashListStatistic) Name() string {
 	return "[DocumentLog] Ordered consistency hash list"
 }
 
-func (d ConsistencyHashListDiagnostic) String() string {
+func (d ConsistencyHashListStatistic) String() string {
 	var result = make([]string, len(d.Hashes))
 	for i, hash := range d.Hashes {
 		result[i] = fmt.Sprintf("%d->%s", i, hash)
@@ -51,26 +51,26 @@ func (d ConsistencyHashListDiagnostic) String() string {
 	return strings.Join(result, " ")
 }
 
-type NumberOfDocumentsDiagnostic struct {
+type NumberOfDocumentsStatistic struct {
 	NumberOfDocuments int
 }
 
-func (d NumberOfDocumentsDiagnostic) Name() string {
+func (d NumberOfDocumentsStatistic) Name() string {
 	return "[DocumentLog] Number of documents"
 }
 
-func (d NumberOfDocumentsDiagnostic) String() string {
+func (d NumberOfDocumentsStatistic) String() string {
 	return fmt.Sprintf("%d", d.NumberOfDocuments)
 }
 
-type LogSizeDiagnostic struct {
+type LogSizeStatistic struct {
 	sizeInBytes int
 }
 
-func (d LogSizeDiagnostic) Name() string {
+func (d LogSizeStatistic) Name() string {
 	return "[DocumentLog] Stored document size (bytes)"
 }
 
-func (d LogSizeDiagnostic) String() string {
+func (d LogSizeStatistic) String() string {
 	return fmt.Sprintf("%d", d.sizeInBytes)
 }

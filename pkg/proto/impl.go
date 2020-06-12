@@ -19,11 +19,11 @@
 package proto
 
 import (
-	core "github.com/nuts-foundation/nuts-go-core"
 	log "github.com/nuts-foundation/nuts-network/logging"
 	"github.com/nuts-foundation/nuts-network/network"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/pkg/p2p"
+	"github.com/nuts-foundation/nuts-network/pkg/stats"
 	"time"
 )
 
@@ -36,14 +36,14 @@ type protocol struct {
 	receivedDocumentHashes    *AdvertedHashQueue
 	peerHashes                map[model.PeerID]model.Hash
 
-	// Cache diagnostics to avoid having to lock precious resources
-	peerConsistencyHashDiagnostic peerConsistencyHashDiagnostic
-	newPeerHashChannel            chan PeerHash
+	// Cache statistics to avoid having to lock precious resources
+	peerConsistencyHashStatistic peerConsistencyHashStatistic
+	newPeerHashChannel           chan PeerHash
 }
 
-func (p *protocol) Diagnostics() []core.DiagnosticResult {
-	return []core.DiagnosticResult{
-		&p.peerConsistencyHashDiagnostic,
+func (p *protocol) Statistics() []stats.Statistic {
+	return []stats.Statistic{
+		&p.peerConsistencyHashStatistic,
 	}
 }
 
@@ -55,7 +55,7 @@ func NewProtocol() Protocol {
 		peerHashes:         make(map[model.PeerID]model.Hash),
 		newPeerHashChannel: make(chan PeerHash, 100),
 
-		peerConsistencyHashDiagnostic: newPeerConsistencyHashDiagnostic(),
+		peerConsistencyHashStatistic: newPeerConsistencyHashStatistic(),
 	}
 	// TODO: Does these numbers make sense?
 	p.receivedConsistencyHashes.internal.Init(100)
@@ -116,11 +116,11 @@ func (p *protocol) updateDiagnostics() {
 				}
 			}
 			if changed {
-				p.peerConsistencyHashDiagnostic.copyFrom(p.peerHashes)
+				p.peerConsistencyHashStatistic.copyFrom(p.peerHashes)
 			}
 		case peerHash := <-p.newPeerHashChannel:
 			p.peerHashes[peerHash.Peer] = peerHash.Hash
-			p.peerConsistencyHashDiagnostic.copyFrom(p.peerHashes)
+			p.peerConsistencyHashStatistic.copyFrom(p.peerHashes)
 		}
 	}
 }

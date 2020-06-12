@@ -7,8 +7,8 @@ import (
 	"testing"
 )
 
-func TestPeerConsistencyHashDiagnostic(t *testing.T) {
-	diagnostic := peerConsistencyHashDiagnostic{peerHashes: new(map[model.PeerID]model.Hash), mux: &sync.Mutex{}}
+func TestPeerConsistencyHashStatistic(t *testing.T) {
+	diagnostic := peerConsistencyHashStatistic{peerHashes: new(map[model.PeerID]model.Hash), mux: &sync.Mutex{}}
 	diagnostic.copyFrom(map[model.PeerID]model.Hash{"abc": []byte{1, 2, 3}})
 	assert.Equal(t, diagnostic.String(), "010203={abc}")
 }

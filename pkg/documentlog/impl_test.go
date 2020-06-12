@@ -126,6 +126,6 @@ func Test_DocumentLog_Diagnostics(t *testing.T) {
 		go func() {
 			log.AddDocumentWithContents(time.Now(), "test", bytes.NewReader([]byte{1, 2, 3}))
 		}()
-		log.Diagnostics() // this should trigger a race condition if we had no locks
+		log.Statistics() // this should trigger a race condition if we had no locks
 	})
 }
