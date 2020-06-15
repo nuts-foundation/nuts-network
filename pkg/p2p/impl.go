@@ -1,3 +1,21 @@
+/*
+ * Copyright (C) 2020. Nuts community
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ */
+
 package p2p
 
 import (
@@ -5,19 +23,22 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/nuts-foundation/nuts-go-core"
 	log "github.com/nuts-foundation/nuts-network/logging"
 	"github.com/nuts-foundation/nuts-network/network"
 	"github.com/nuts-foundation/nuts-network/pkg/concurrency"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
+	"github.com/nuts-foundation/nuts-network/pkg/stats"
 	errors2 "github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	grpcPeer "google.golang.org/grpc/peer"
 	"net"
+	"sync"
 	"time"
 )
+
+type Dialer func(ctx context.Context, target string, opts ...grpc.DialOption) (conn *grpc.ClientConn, err error)
 
 type p2pNetwork struct {
 	config P2PNetworkConfig
@@ -36,13 +57,14 @@ type p2pNetwork struct {
 	peersByAddr      map[string]*peer
 	peerMutex        concurrency.SaferRWMutex
 	receivedMessages messageQueue
+	peerDialer       Dialer
 }
 
-func (n p2pNetwork) Diagnostics() []core.DiagnosticResult {
+func (n p2pNetwork) Statistics() []stats.Statistic {
 	peers := n.Peers()
-	return []core.DiagnosticResult{
-		NumberOfDiagnosticsResult{NumberOfPeers: len(peers)},
-		PeersDiagnosticsResult{Peers: peers},
+	return []stats.Statistic{
+		NumberOfPeersStatistic{NumberOfPeers: len(peers)},
+		PeersStatistic{Peers: peers},
 	}
 }
 
@@ -87,6 +109,7 @@ func (n p2pNetwork) Send(peerId model.PeerID, message *network.NetworkMessage) e
 type remoteNode struct {
 	model.NodeInfo
 	backoff Backoff
+	Dialer
 }
 
 func (r *remoteNode) connect(config P2PNetworkConfig) (*peer, error) {
@@ -98,7 +121,7 @@ func (r *remoteNode) connect(config P2PNetworkConfig) (*peer, error) {
 		InsecureSkipVerify: true, // TODO: Is the actually secure?
 		//RootCAs:      caCertPool, // TODO
 	})
-	conn, err := grpc.DialContext(cxt, r.NodeInfo.Address, grpc.WithBlock(), grpc.WithTransportCredentials(tlsCredentials))
+	conn, err := r.Dialer(cxt, r.NodeInfo.Address, grpc.WithBlock(), grpc.WithTransportCredentials(tlsCredentials))
 	if err != nil {
 		return nil, err
 	}
@@ -130,12 +153,13 @@ func (r *remoteNode) connect(config P2PNetworkConfig) (*peer, error) {
 	}
 
 	return &peer{
-		id:     model.GetPeerID(r.NodeInfo.Address),
-		nodeID: r.NodeInfo.ID,
-		conn:   conn,
-		client: client,
-		gate:   gate,
-		addr:   r.NodeInfo.Address,
+		id:         model.GetPeerID(r.NodeInfo.Address),
+		nodeID:     r.NodeInfo.ID,
+		conn:       conn,
+		client:     client,
+		gate:       gate,
+		addr:       r.NodeInfo.Address,
+		closeMutex: &sync.Mutex{},
 	}, nil
 }
 
@@ -147,7 +171,15 @@ func NewP2PNetwork() P2PNetwork {
 		remoteNodeAddChannel: make(chan model.NodeInfo, 100), // TODO: Does this number make sense?
 		peerMutex:            concurrency.NewSaferRWMutex("p2p-peers"),
 		receivedMessages:     messageQueue{c: make(chan PeerMessage, 100)}, // TODO: Does this number make sense?
+		peerDialer:           grpc.DialContext,
 	}
+}
+
+func NewP2PNetworkWithOptions(listener net.Listener, dialer Dialer) P2PNetwork {
+	result := NewP2PNetwork().(*p2pNetwork)
+	result.listener = listener
+	result.peerDialer = dialer
+	return result
 }
 
 type messageQueue struct {
@@ -159,20 +191,30 @@ func (m messageQueue) Get() PeerMessage {
 }
 
 func (n *p2pNetwork) Start(config P2PNetworkConfig) error {
+	if config.NodeID == "" {
+		return errors.New("NodeID is empty")
+	}
+	if config.ListenAddress == "" {
+		return errors.New("ListenAddress is empty")
+	}
 	log.Log().Infof("Starting gRPC server (ID: %s) on %s", config.NodeID, config.ListenAddress)
 	n.config = config
 	var err error
-	// TODO: Verify TLS configuration
-	tlsCredentials := credentials.NewTLS(&tls.Config{
-		Certificates: []tls.Certificate{config.ServerCert},
-		ClientAuth:   tls.RequireAnyClientCert, // TODO: Switch to RequireAndVerify
-		// TODO: Add RootCAs/ClientCAs option
-	})
-	n.listener, err = net.Listen("tcp", config.ListenAddress)
-	if err != nil {
-		return err
+	// We allow test code to set the listener to allow for in-memory (bufnet) channels
+	var serverOpts = make([]grpc.ServerOption, 0)
+	if n.listener == nil {
+		n.listener, err = net.Listen("tcp", config.ListenAddress)
+		if err != nil {
+			return err
+		}
+		// TODO: Verify TLS configuration
+		serverOpts = append(serverOpts, grpc.Creds(credentials.NewTLS(&tls.Config{
+			Certificates: []tls.Certificate{config.ServerCert},
+			ClientAuth:   tls.RequireAnyClientCert, // TODO: Switch to RequireAndVerify
+			// TODO: Add RootCAs/ClientCAs option
+		})))
 	}
-	n.grpcServer = grpc.NewServer(grpc.Creds(tlsCredentials))
+	n.grpcServer = grpc.NewServer(serverOpts...)
 	network.RegisterNetworkServer(n.grpcServer, n)
 	go func() {
 		err = n.grpcServer.Serve(n.listener)
@@ -210,17 +252,17 @@ func (n *p2pNetwork) Stop() error {
 func (n p2pNetwork) AddRemoteNode(nodeInfo model.NodeInfo) {
 	if n.shouldConnectTo(nodeInfo) {
 		n.remoteNodeAddChannel <- nodeInfo
-		log.Log().Infof("Added remote node to connect to: %s", nodeInfo)
 	}
 }
 
 func (n *p2pNetwork) sendAndReceiveForPeer(peer *peer) {
-	go peer.startSending()
+	peer.outMessages = make(chan *network.NetworkMessage, 10) // TODO: Does this number make sense? Should also be configurable?
+	go peer.sendMessages()
 	n.addPeer(peer)
 	// TODO: Check NodeID sent by peer
-	peer.startReceiving(peer, n.receivedMessages)
+	receiveMessages(peer.gate, peer.id, n.receivedMessages)
 	peer.close()
-	// When we reach this line, startReceiving has exited which means the connection has been closed.
+	// When we reach this line, receiveMessages has exited which means the connection has been closed.
 	n.removePeer(peer)
 }
 
@@ -231,6 +273,7 @@ func (n *p2pNetwork) connectToRemoteNodes() {
 			remoteNode := &remoteNode{
 				NodeInfo: nodeInfo,
 				backoff:  defaultBackoff(),
+				Dialer:   n.peerDialer,
 			}
 			n.remoteNodes[nodeInfo.ID] = remoteNode
 			log.Log().Infof("Added remote node: %s", nodeInfo)
@@ -301,12 +344,18 @@ func (n p2pNetwork) Connect(stream network.Network_ConnectServer) error {
 	if err := stream.SendHeader(constructMetadata(n.config.NodeID)); err != nil {
 		return errors2.Wrap(err, "unable to send headers")
 	}
+	remoteAddr := peerCtx.Addr.String()
+	if remoteAddr == "bufconn" {
+		// This is a shared-memory connection, in which case we should take the nodeID since all incoming shared-memory
+		// connections have the same remote address.
+		remoteAddr = nodeID.String()
+	}
 	peer := &peer{
-		// TODO
-		id:     model.GetPeerID(peerCtx.Addr.String()),
-		nodeID: nodeID,
-		gate:   stream,
-		addr:   peerCtx.Addr.String(),
+		id:         model.GetPeerID(remoteAddr),
+		nodeID:     nodeID,
+		gate:       stream,
+		addr:       remoteAddr,
+		closeMutex: &sync.Mutex{},
 	}
 	n.sendAndReceiveForPeer(peer)
 	return nil

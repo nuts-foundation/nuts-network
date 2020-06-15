@@ -1,11 +1,29 @@
+/*
+ * Copyright (C) 2020. Nuts community
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ */
+
 package proto
 
 import (
-	core "github.com/nuts-foundation/nuts-go-core"
 	log "github.com/nuts-foundation/nuts-network/logging"
 	"github.com/nuts-foundation/nuts-network/network"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/pkg/p2p"
+	"github.com/nuts-foundation/nuts-network/pkg/stats"
 	"time"
 )
 
@@ -18,37 +36,37 @@ type protocol struct {
 	receivedDocumentHashes    *AdvertedHashQueue
 	peerHashes                map[model.PeerID]model.Hash
 
-	// Cache diagnostics to avoid having to lock precious resources
-	peerConsistencyHashDiagnostic peerConsistencyHashDiagnostic
-	newPeerHashChannel            chan PeerHash
+	// Cache statistics to avoid having to lock precious resources
+	peerConsistencyHashStatistic peerConsistencyHashStatistic
+	newPeerHashChannel           chan PeerHash
 }
 
-func (p *protocol) Diagnostics() []core.DiagnosticResult {
-	return []core.DiagnosticResult{
-		p.peerConsistencyHashDiagnostic,
+func (p *protocol) Statistics() []stats.Statistic {
+	return []stats.Statistic{
+		&p.peerConsistencyHashStatistic,
 	}
 }
 
 func NewProtocol() Protocol {
-	return &protocol{
-		receivedConsistencyHashes: &AdvertedHashQueue{
-			c: make(chan PeerHash, 100), // TODO: Does this number make sense?
-		},
-		receivedDocumentHashes: &AdvertedHashQueue{
-			c: make(chan PeerHash, 1000), // TODO: Does this number make sense?
-		},
+	p := &protocol{
+		receivedConsistencyHashes: &AdvertedHashQueue{},
+		receivedDocumentHashes:    &AdvertedHashQueue{},
 
 		peerHashes:         make(map[model.PeerID]model.Hash),
 		newPeerHashChannel: make(chan PeerHash, 100),
 
-		peerConsistencyHashDiagnostic: peerConsistencyHashDiagnostic{peerHashes: map[model.PeerID]model.Hash{}},
+		peerConsistencyHashStatistic: newPeerConsistencyHashStatistic(),
 	}
+	// TODO: Does these numbers make sense?
+	p.receivedConsistencyHashes.internal.Init(100)
+	p.receivedDocumentHashes.internal.Init(1000)
+	return p
 }
 
 func (p *protocol) Start(p2pNetwork p2p.P2PNetwork, hashSource HashSource) {
 	p.p2pNetwork = p2pNetwork
 	p.hashSource = hashSource
-	go p.consumeMessages()
+	go p.consumeMessages(p.p2pNetwork.ReceivedMessages())
 	go p.updateDiagnostics()
 }
 
@@ -98,25 +116,16 @@ func (p *protocol) updateDiagnostics() {
 				}
 			}
 			if changed {
-				p.peerConsistencyHashDiagnostic.peerHashes = copyPeerHashMap(p.peerHashes)
+				p.peerConsistencyHashStatistic.copyFrom(p.peerHashes)
 			}
 		case peerHash := <-p.newPeerHashChannel:
 			p.peerHashes[peerHash.Peer] = peerHash.Hash
-			p.peerConsistencyHashDiagnostic.peerHashes = copyPeerHashMap(p.peerHashes)
+			p.peerConsistencyHashStatistic.copyFrom(p.peerHashes)
 		}
 	}
 }
 
-func copyPeerHashMap(input map[model.PeerID]model.Hash) map[model.PeerID]model.Hash {
-	var output = make(map[model.PeerID]model.Hash, len(input))
-	for k, v := range input {
-		output[k] = v
-	}
-	return output
-}
-
-func (p protocol) consumeMessages() {
-	queue := p.p2pNetwork.ReceivedMessages()
+func (p protocol) consumeMessages(queue p2p.MessageQueue) {
 	for {
 		peerMsg := queue.Get()
 		msg := peerMsg.Message
@@ -138,72 +147,25 @@ func (p *protocol) handleMessage(peerMsg p2p.PeerMessage) error {
 	peer := peerMsg.Peer
 	msg := peerMsg.Message
 	if msg.AdvertHash != nil {
-		log.Log().Debugf("Received adverted hash from peer: %s", peer)
-		peerHash := PeerHash{
-			Peer: peer,
-			Hash: msg.AdvertHash.Hash,
-		}
-		p.newPeerHashChannel <- peerHash
-		p.receivedConsistencyHashes.c <- peerHash
+		p.handleAdvertHash(peer, msg.AdvertHash)
 	}
 	if msg.HashListQuery != nil {
-		log.Log().Debugf("Received hash list query from peer, responding with consistency hash list (peer=%s)", peer)
-		msg := createMessage()
-		msg.HashList = &network.HashList{
-			Hashes: make([]*network.HashInTime, len(p.hashSource.DocumentHashes())),
-		}
-		for i, hash := range p.hashSource.DocumentHashes() {
-			msg.HashList.Hashes[i] = &network.HashInTime{
-				Time: hash.Timestamp.UnixNano(),
-				Hash: hash.Hash,
-			}
-		}
-		if err := p.p2pNetwork.Send(peer, &msg); err != nil {
+		if err := p.handleHashListQuery(peer); err != nil {
 			return err
 		}
 	}
 	if msg.HashList != nil {
-		log.Log().Debugf("Received hash list from peer (peer=%s)", peer)
-		for _, hashInTime := range msg.HashList.Hashes {
-			hash := model.Hash(hashInTime.Hash)
-			p.hashSource.AddDocumentHash(hash, time.Unix(0, hashInTime.Time))
-			if !p.hashSource.HasDocument(hash) {
-				log.Log().Infof("Received document hash from peer that we don't have yet, will query it (peer=%s,hash=%s)", peer, model.Hash(hash))
-				responseMsg := createMessage()
-				responseMsg.DocumentQuery = &network.DocumentQuery{Hash: hash}
-				if err := p.p2pNetwork.Send(peer, &responseMsg); err != nil {
-					return err
-				}
-			}
-		}
-	}
-	if msg.DocumentQuery != nil && msg.DocumentQuery.Hash != nil {
-		hash := model.Hash(msg.DocumentQuery.Hash)
-		log.Log().Debugf("Received document query from peer (peer=%s, hash=%s)", peer, hash)
-		// TODO: Maybe this should be asynchronous since loading document contents might be I/O heavy?
-		document := p.hashSource.GetDocument(hash)
-		if document.Contents == nil {
-			log.Log().Warnf("Peer queried us for a document, but we don't appear to have it (peer=%s,document=%s)", peer, hash)
-			return nil
-		}
-		responseMsg := createMessage()
-		responseMsg.Document = &network.Document{
-			Time:     document.Timestamp.UnixNano(),
-			Contents: document.Contents,
-			Type:     document.Type,
-		}
-		if err := p.p2pNetwork.Send(peer, &responseMsg); err != nil {
+		if err := p.handleHashList(peer, msg.HashList); err != nil {
 			return err
 		}
 	}
-	if msg.Document != nil && msg.Document.Contents != nil {
-		log.Log().Infof("Received document from peer (peer=%s,time=%d,type=%s)", peer, msg.Document.Time, msg.Document.Type)
-		// TODO: Maybe this should be asynchronous since writing the document contents might be I/O heavy?
-		p.hashSource.AddDocument(&model.Document{
-			Contents:  msg.Document.Contents,
-			Timestamp: time.Unix(0, msg.Document.Time),
-			Type:      msg.Document.Type,
-		})
+	if msg.DocumentContentsQuery != nil && msg.DocumentContentsQuery.Hash != nil {
+		if err := p.handleDocumentContentsQuery(peer, msg.DocumentContentsQuery); err != nil {
+			return err
+		}
+	}
+	if msg.DocumentContents != nil && msg.DocumentContents.Hash != nil && msg.DocumentContents.Contents != nil {
+		p.handleDocumentContents(peer, msg.DocumentContents)
 	}
 	return nil
 }

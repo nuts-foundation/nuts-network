@@ -19,44 +19,40 @@
 package p2p
 
 import (
-	"time"
+	"fmt"
+	"sort"
+	"strings"
 )
 
-type Backoff interface {
-	Reset()
-	Backoff() time.Duration
+type NumberOfPeersStatistic struct {
+	NumberOfPeers int
 }
 
-type backoff struct {
-	multiplier float64
-	value      time.Duration
-	max        time.Duration
-	min        time.Duration
+func (n NumberOfPeersStatistic) Name() string {
+	return "[P2P Network] Connected peers #"
 }
 
-func (b *backoff) Reset() {
-	b.value = 0
+func (n NumberOfPeersStatistic) String() string {
+	return fmt.Sprintf("%d", n.NumberOfPeers)
 }
 
-func (b *backoff) Backoff() time.Duration {
-	// TODO: Might want to add jitter (e.g. https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md)
-	if b.value < b.min {
-		b.value = b.min
-	} else {
-		b.value = time.Duration(float64(b.value) * b.multiplier)
-		if b.value > b.max {
-			b.value = b.max
-		}
+type PeersStatistic struct {
+	Peers []Peer
+}
+
+func (p PeersStatistic) Name() string {
+	return "[P2P Network] Connected peers"
+}
+
+func (p PeersStatistic) String() string {
+	addrs := make([]string, len(p.Peers))
+	for i, peer := range p.Peers {
+		addrs[i] = peer.String()
 	}
-	return b.value
+	// Sort for stable order (easier for humans to understand)
+	sort.Slice(addrs, func(i, j int) bool {
+		return addrs[i] > addrs[j]
+	})
+	return strings.Join(addrs, " ")
 }
 
-func defaultBackoff() Backoff {
-	// TODO: Make this configurable
-	return &backoff{
-		multiplier: 1.5,
-		value:      0,
-		max:        30 * time.Second,
-		min:        time.Second,
-	}
-}

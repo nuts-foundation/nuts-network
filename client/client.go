@@ -16,47 +16,30 @@
  *
  */
 
-package p2p
+package client
 
 import (
+	core "github.com/nuts-foundation/nuts-go-core"
+	"github.com/nuts-foundation/nuts-network/api"
+	"github.com/nuts-foundation/nuts-network/pkg"
+	"github.com/sirupsen/logrus"
 	"time"
 )
 
-type Backoff interface {
-	Reset()
-	Backoff() time.Duration
-}
+// NewRegistryClient creates a new Local- or RemoteClient for the nuts registry
+func NewNetworkClient() pkg.NetworkClient {
+	instance := pkg.NetworkInstance()
 
-type backoff struct {
-	multiplier float64
-	value      time.Duration
-	max        time.Duration
-	min        time.Duration
-}
-
-func (b *backoff) Reset() {
-	b.value = 0
-}
-
-func (b *backoff) Backoff() time.Duration {
-	// TODO: Might want to add jitter (e.g. https://github.com/grpc/grpc/blob/master/doc/connection-backoff.md)
-	if b.value < b.min {
-		b.value = b.min
-	} else {
-		b.value = time.Duration(float64(b.value) * b.multiplier)
-		if b.value > b.max {
-			b.value = b.max
+	if core.NutsConfig().GetEngineMode(instance.Config.Mode) == core.ServerEngineMode {
+		if err := instance.Configure(); err != nil {
+			logrus.Panic(err)
 		}
-	}
-	return b.value
-}
 
-func defaultBackoff() Backoff {
-	// TODO: Make this configurable
-	return &backoff{
-		multiplier: 1.5,
-		value:      0,
-		max:        30 * time.Second,
-		min:        time.Second,
+		return instance
+	} else {
+		return api.HttpClient{
+			ServerAddress: instance.Config.Address,
+			Timeout:       30 * time.Second,
+		}
 	}
 }

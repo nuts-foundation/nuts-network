@@ -17,8 +17,8 @@ message NetworkMessage {
     AdvertHash advertHash = 100;
     HashListQuery hashListQuery = 101;
     HashList hashList = 102;
-    DocumentQuery documentQuery = 103;
-    Document document = 104;
+    DocumentContentsQuery documentContentsQuery = 103;
+    DocumentContents documentContents = 104;
 }
 
 // Metadata types
@@ -37,21 +37,21 @@ message HashListQuery {
 
 // Message to inform a peer of our hash list
 message HashList {
-    repeated HashInTime hashes = 1;
-}
-
-message HashInTime {
-    int64 time = 1;
-    bytes hash = 2;
-}
-
-// Message to ask for a peer for a specific document
-message DocumentQuery {
-    bytes hash = 1;
+    repeated Document hashes = 1;
 }
 
 message Document {
-    int64 time = 1;
-    string type = 2;
+    bytes hash = 1;
+    int64 time = 2;
+    string type = 3;
+}
+
+// Message to ask for a peer for a specific document
+message DocumentContentsQuery {
+    bytes hash = 1;
+}
+
+message DocumentContents {
+    bytes hash = 1;
     bytes contents = 10;
 }

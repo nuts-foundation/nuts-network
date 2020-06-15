@@ -40,6 +40,12 @@ Building
 
 This project is part of https://github.com/nuts-foundation/nuts-go. If you do however would like a binary, just use ``go build``.
 
+The (internal) server and client API is generated from the open-api spec:
+
+.. code-block:: shell
+
+    oapi-codegen -generate types,server,client -package api docs/_static/nuts-network.yaml > api/generated.go
+
 The peer-to-peer API uses gRPC. To generate Go code from the protobuf specs you need the `protoc-gen-go` package:
 
 .. code-block:: shell
@@ -51,6 +57,13 @@ To generate the Go server and client code, run the following command:
 .. code-block:: shell
 
     protoc -I network network/network.proto --go_out=plugins=grpc,paths=source_relative:network
+
+To generate the mocks, run the following commands:
+
+.. code-block:: shell
+
+    ~/go/bin/mockgen -destination=test/mock_client.go -package=test -source=pkg/interface.go
+    ~/go/bin/mockgen -destination=test/mock_protocol.go -package=test -source=pkg/proto/interface.go Protocol
 
 Running in Docker
 *****************

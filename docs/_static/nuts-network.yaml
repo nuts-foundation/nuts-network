@@ -1,0 +1,135 @@
+openapi: "3.0.0"
+info:
+  title: Nuts network API spec
+  description: API specification for RPC services available at the nuts-network
+  version: 0.1.0
+  license:
+    name: GPLv3
+paths:
+  /api/document:
+    get:
+      summary: "Lists the documents on the log"
+      description: >
+        Lists all documents on the log. Since this call returns all documents on the log, care should be taken when there
+        are many of them.
+        TODO: By then we'd need a more elaborate querying interface (ranging over timestamps/hashes, pagination, filtering, etc).
+      operationId: "listDocuments"
+      tags:
+        - documents
+      responses:
+        "200":
+          description: "Successfully listed the documents"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Document'
+    post:
+      summary: "Adds a document to the document log"
+      operationId: "addDocument"
+      tags:
+        - documents
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DocumentWithContents'
+      responses:
+        "201":
+          description: "Document was successfully added to the document log"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+        "409":
+          description: "Document with that hash already exists"
+          content:
+            text/plain:
+              example: "Document already exists"
+        "400":
+          description: "Supplied document is invalid"
+          content:
+            text/plain:
+              example: "Document hash mismatch"
+  /api/document/{hash}:
+    parameters:
+      - name: hash
+        in: path
+        description: "Hex-encoded hash of the document"
+        required: true
+        example: "37076f2cbe014a109d79b61ae9c7191f4cc57afc"
+        schema:
+          type: string
+    get:
+      summary: "Retrieves a document"
+      operationId: "getDocument"
+      tags:
+        - documents
+      responses:
+        "200":
+          description: "Document is known in the document log"
+        "404":
+          description: "Document wasn't found in the document log"
+  /api/document/{hash}/contents:
+    parameters:
+      - name: hash
+        in: path
+        description: "Hex-encoded hash of the document"
+        required: true
+        example: "37076f2cbe014a109d79b61ae9c7191f4cc57afc"
+        schema:
+          type: string
+    get:
+      summary: "Gets the document contents"
+      operationId: "getDocumentContents"
+      tags:
+        - documents
+      responses:
+        "200":
+          description: "Document found (with contents) and returned."
+          content:
+            application/octet-stream:
+              example:
+        "404":
+          description: "Document (or contents) wasn't found in the document log"
+
+components:
+  schemas:
+    DocumentWithContents:
+      required:
+        - type
+        - timestamp
+        - contents
+      properties:
+        type:
+          type: string
+          description: type of the document
+          example: node-info
+        timestamp:
+          type: integer
+          format: int64
+          description: Timestamp at which the document was created in nanoseconds (since Unix epoch)
+        contents:
+          type: string
+          format: byte
+          description: Actual contents of the document
+    Document:
+      required:
+        - hash
+        - type
+        - timestamp
+      properties:
+        hash:
+          type: string
+          description: Hex-encoded hash of the document
+          example: 37076f2cbe014a109d79b61ae9c7191f4cc57afc
+        type:
+          type: string
+          description: type of the document
+          example: node-info
+        timestamp:
+          type: integer
+          format: int64
+          description: Timestamp at which the document was created in nanoseconds (since Unix epoch)

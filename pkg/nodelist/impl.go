@@ -1,7 +1,28 @@
+/*
+ * Copyright (C) 2020. Nuts community
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ */
+
 package nodelist
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	log "github.com/nuts-foundation/nuts-network/logging"
 	"github.com/nuts-foundation/nuts-network/pkg/documentlog"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
@@ -12,9 +33,11 @@ import (
 const nodeInfoDocumentType = "node-info"
 
 type nodeList struct {
-	documents             documentlog.DocumentLog
-	p2pNetwork            p2p.P2PNetwork
-	publicAddr            string
+	documentLog documentlog.DocumentLog
+	p2pNetwork  p2p.P2PNetwork
+	publicAddr  string
+	cxt         context.Context
+	cxtCancel   context.CancelFunc
 }
 
 func (n *nodeList) Start(nodeID model.NodeID, publicAddr string) {
@@ -25,26 +48,52 @@ func (n *nodeList) Start(nodeID model.NodeID, publicAddr string) {
 		n.publicAddr = publicAddr
 		log.Log().Infof("Registering local node on nodelist (id=%s,addr=%s)", nodeID, publicAddr)
 		data, _ := json.Marshal(model.NodeInfo{ID: nodeID, Address: publicAddr})
-		n.documents.AddDocument(&model.Document{Timestamp: time.Now(), Contents: data, Type: nodeInfoDocumentType})
+		if _, err := n.documentLog.AddDocumentWithContents(time.Now(), nodeInfoDocumentType, bytes.NewReader(data)); err != nil {
+			// TODO: Shouldn't this be blocking?
+			log.Log().Errorf("Error while adding document with contents: %v", err)
+		}
 	}
-	documentQueue := n.documents.Subscribe(nodeInfoDocumentType)
-	go n.consumeNodeInfo(documentQueue)
+	n.cxt, n.cxtCancel = context.WithCancel(context.Background())
+
+	documentQueue := n.documentLog.Subscribe(nodeInfoDocumentType)
+	go n.consumeNodeInfoFromQueue(documentQueue)
 }
 
 func (n nodeList) Stop() {
-	// TODO: stop loops
+	n.cxtCancel()
 }
 
-func (n *nodeList) consumeNodeInfo(queue documentlog.DocumentQueue) {
-	// TODO: When to cancel?
+func (n *nodeList) consumeNodeInfoFromQueue(queue documentlog.DocumentQueue) {
 	for {
-		document := queue.Get()
-		nodeInfo := model.NodeInfo{}
-		if err := json.Unmarshal(document.Contents, &nodeInfo); err != nil {
-			log.Log().Errorf("Can't parse node info from document (hash=%s)", document.Hash())
-			continue
+		document, err := queue.Get(n.cxt)
+		if err != nil {
+			log.Log().Debugf("Get cancelled: %v", err)
+			return
 		}
-		log.Log().Tracef("Parsed node info (ID=%s,Addr=%s)", nodeInfo.ID, nodeInfo.Address)
-		n.p2pNetwork.AddRemoteNode(nodeInfo)
+		if err := n.consumeNodeInfo(document); err != nil {
+			log.Log().Errorf("Error while processing nodelist document (hash=%s): %v", document.Hash, err)
+		}
 	}
+}
+
+func (n *nodeList) consumeNodeInfo(document model.Document) error {
+	nodeInfo := model.NodeInfo{}
+	reader, err := n.documentLog.GetDocumentContents(document.Hash)
+	if err != nil {
+		return err
+	}
+	if reader == nil {
+		return errors.New("document contents not found")
+	}
+	defer reader.Close()
+	buffer := new(bytes.Buffer)
+	if _, err = buffer.ReadFrom(reader); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(buffer.Bytes(), &nodeInfo); err != nil {
+		return err
+	}
+	log.Log().Tracef("Parsed node info (ID=%s,Addr=%s)", nodeInfo.ID, nodeInfo.Address)
+	n.p2pNetwork.AddRemoteNode(nodeInfo)
+	return nil
 }

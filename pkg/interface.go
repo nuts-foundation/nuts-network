@@ -16,20 +16,19 @@
  *
  */
 
-package nodelist
+package pkg
 
 import (
-	"github.com/nuts-foundation/nuts-network/pkg/documentlog"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
-	"github.com/nuts-foundation/nuts-network/pkg/p2p"
+	"io"
+	"time"
 )
 
-func NewNodeList(log documentlog.DocumentLog, p2pNetwork p2p.P2PNetwork) NodeList {
-	return &nodeList{documentLog: log, p2pNetwork: p2pNetwork}
-}
+// NetworkClient is the interface to be implemented by any remote or local client
+type NetworkClient interface {
 
-// NodeList is one of the applications built on top of the Nuts network which is used for discovering new nodes.
-type NodeList interface {
-	Start(nodeID model.NodeID, address string)
-	Stop()
+	GetDocumentContents(hash model.Hash) (io.ReadCloser, error)
+	GetDocument(hash model.Hash) (*model.Document, error)
+	AddDocumentWithContents(timestamp time.Time, docType string, contents []byte) (model.Document, error)
+	ListDocuments() ([]model.Document, error)
 }

@@ -16,20 +16,27 @@
  *
  */
 
-package nodelist
+package test
 
 import (
-	"github.com/nuts-foundation/nuts-network/pkg/documentlog"
-	"github.com/nuts-foundation/nuts-network/pkg/model"
-	"github.com/nuts-foundation/nuts-network/pkg/p2p"
+	"bytes"
+	"encoding/json"
+	"io"
 )
 
-func NewNodeList(log documentlog.DocumentLog, p2pNetwork p2p.P2PNetwork) NodeList {
-	return &nodeList{documentLog: log, p2pNetwork: p2pNetwork}
+type JSONReader struct {
+	Input interface{}
+	reader io.Reader
 }
 
-// NodeList is one of the applications built on top of the Nuts network which is used for discovering new nodes.
-type NodeList interface {
-	Start(nodeID model.NodeID, address string)
-	Stop()
+func (j *JSONReader) Read(p []byte) (n int, err error) {
+	if j.reader == nil {
+		data, err := json.Marshal(j.Input)
+		if err != nil {
+			return 0, err
+		}
+		j.reader = bytes.NewReader(data)
+	}
+	return j.reader.Read(p)
 }
+

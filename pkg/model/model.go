@@ -1,3 +1,21 @@
+/*
+ * Copyright (C) 2020. Nuts community
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ */
+
 package model
 
 import (
@@ -10,11 +28,6 @@ import (
 )
 
 const HashSize = 20
-
-type DocumentHash struct {
-	Hash
-	Timestamp time.Time
-}
 
 type Hash []byte
 
@@ -46,6 +59,17 @@ func (h Hash) String() string {
 	return hex.EncodeToString(h)
 }
 
+func ParseHash(input string) (Hash, error) {
+	bytes, err := hex.DecodeString(input)
+	if err != nil {
+		return nil, err
+	}
+	if len(bytes) != HashSize {
+		return nil, fmt.Errorf("incorrect hash length (%d)", len(bytes))
+	}
+	return bytes, nil
+}
+
 func MakeConsistencyHash(h1 Hash, h2 Hash) Hash {
 	target := EmptyHash()
 	// TODO: This a naive, relatively slow to XOR 2 byte slices. There's a faster way: https://github.com/lukechampine/fastxor/blob/master/xor.go
@@ -73,18 +97,29 @@ func GetPeerID(addr string) PeerID {
 
 // TODO: Should this be an interface?
 type Document struct {
-	Contents  []byte
+	Hash      Hash
 	Type      string
 	Timestamp time.Time
 }
 
-func (d Document) Hash() Hash {
+func (d Document) Clone() Document {
+	cp := d
+	if cp.Hash == nil {
+		cp.Hash = nil
+	} else {
+		cp.Hash = cp.Hash.Clone()
+	}
+	return cp
+}
+
+func CalculateDocumentHash(docType string, timestamp time.Time, contents []byte) Hash {
 	// TODO: Document this
 	input := map[string]interface{}{
-		"contents": d.Contents,
-		"type": d.Type,
-		"timestamp": d.Timestamp.UnixNano(),
+		"contents":  contents,
+		"type":      docType,
+		"timestamp": timestamp.UnixNano(),
 	}
+	// TODO: Canonicalize?
 	data, _ := json.Marshal(input)
 	h := sha1.Sum(data)
 	return h[:]
