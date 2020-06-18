@@ -95,7 +95,7 @@ func (a ApiWrapper) AddDocument(ctx echo.Context) error {
 		logging.Log().Warnf("Unable to add document: %v", err)
 		return ctx.String(http.StatusInternalServerError, err.Error())
 	}
-	return writeDocument(ctx, http.StatusCreated, outputDocument)
+	return writeDocument(ctx, http.StatusCreated, *outputDocument)
 }
 
 func writeDocument(ctx echo.Context, statusCode int, document model.Document) error {

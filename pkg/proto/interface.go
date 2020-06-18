@@ -61,15 +61,18 @@ type PeerHash struct {
 }
 
 type HashSource interface {
-	Documents() []model.Document
+	Documents() ([]model.Document, error)
+	// AddMissingDocuments takes a list of documents, adds the ones that it doesn't have and reports for what documents
+	// contents are missing.
+	AddMissingDocuments([]model.Document) ([]model.Hash, error)
 	// HasDocument tests whether the document is present for the given hash
-	HasDocument(hash model.Hash) bool
-	HasContentsForDocument(hash model.Hash) bool
-	GetDocument(hash model.Hash) *model.Document
+	HasDocument(hash model.Hash) (bool, error)
+	HasContentsForDocument(hash model.Hash) (bool, error)
+	GetDocument(hash model.Hash) (*model.Document, error)
 	GetDocumentContents(hash model.Hash) (io.ReadCloser, error)
-	AddDocument(document model.Document)
-	AddDocumentWithContents(timestamp time.Time, documentType string, contents io.Reader) (model.Document, error)
-	AddDocumentContents(hash model.Hash, contents io.Reader) (model.Document, error)
+	AddDocument(document model.Document) error
+	AddDocumentWithContents(timestamp time.Time, documentType string, contents io.Reader) (*model.Document, error)
+	AddDocumentContents(hash model.Hash, contents io.Reader) (*model.Document, error)
 }
 
 type AdvertedHashQueue struct {

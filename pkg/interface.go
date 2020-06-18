@@ -29,6 +29,6 @@ type NetworkClient interface {
 
 	GetDocumentContents(hash model.Hash) (io.ReadCloser, error)
 	GetDocument(hash model.Hash) (*model.Document, error)
-	AddDocumentWithContents(timestamp time.Time, docType string, contents []byte) (model.Document, error)
+	AddDocumentWithContents(timestamp time.Time, docType string, contents []byte) (*model.Document, error)
 	ListDocuments() ([]model.Document, error)
 }

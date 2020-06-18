@@ -132,7 +132,7 @@ func (n *Network) Start() error {
 }
 
 func (n *Network) GetDocument(hash model.Hash) (*model.Document, error) {
-	return n.documentLog.GetDocument(hash), nil
+	return n.documentLog.GetDocument(hash)
 }
 
 func (n *Network) GetDocumentContents(hash model.Hash) (io.ReadCloser, error) {
@@ -140,10 +140,10 @@ func (n *Network) GetDocumentContents(hash model.Hash) (io.ReadCloser, error) {
 }
 
 func (n *Network) ListDocuments() ([]model.Document, error) {
-	return n.documentLog.Documents(), nil
+	return n.documentLog.Documents()
 }
 
-func (n *Network) AddDocumentWithContents(timestamp time.Time, docType string, contents []byte) (model.Document, error) {
+func (n *Network) AddDocumentWithContents(timestamp time.Time, docType string, contents []byte) (*model.Document, error) {
 	log.Log().Infof("Adding document (timestamp=%d,type=%s,content length=%d)", timestamp.UnixNano(), docType, len(contents))
 	// TODO: Validation
 	return n.documentLog.AddDocumentWithContents(timestamp, docType, bytes.NewReader(contents))

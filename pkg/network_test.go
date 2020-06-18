@@ -34,7 +34,7 @@ func TestNetwork_ListDocuments(t *testing.T) {
 			Hash:      model.EmptyHash(),
 			Type:      "foo",
 			Timestamp: time.Now(),
-		}})
+		}}, nil)
 		docs, err := cxt.network.ListDocuments()
 		assert.Len(t, docs, 1)
 		assert.NoError(t, err)

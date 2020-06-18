@@ -20,11 +20,12 @@ package documentlog
 
 import (
 	"fmt"
+	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"strings"
 )
 
 type LastConsistencyHashStatistic struct {
-	Hash string
+	Hash model.Hash
 }
 
 func (d LastConsistencyHashStatistic) Name() string {
@@ -32,7 +33,7 @@ func (d LastConsistencyHashStatistic) Name() string {
 }
 
 func (d LastConsistencyHashStatistic) String() string {
-	return d.Hash
+	return d.Hash.String()
 }
 
 type ConsistencyHashListStatistic struct {

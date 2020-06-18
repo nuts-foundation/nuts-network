@@ -192,11 +192,12 @@ func (m *MockHashSource) EXPECT() *MockHashSourceMockRecorder {
 }
 
 // Documents mocks base method
-func (m *MockHashSource) Documents() []model.Document {
+func (m *MockHashSource) Documents() ([]model.Document, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Documents")
 	ret0, _ := ret[0].([]model.Document)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Documents indicates an expected call of Documents
@@ -205,12 +206,28 @@ func (mr *MockHashSourceMockRecorder) Documents() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Documents", reflect.TypeOf((*MockHashSource)(nil).Documents))
 }
 
+// AddMissingDocuments mocks base method
+func (m *MockHashSource) AddMissingDocuments(arg0 []model.Document) ([]model.Hash, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddMissingDocuments", arg0)
+	ret0, _ := ret[0].([]model.Hash)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// AddMissingDocuments indicates an expected call of AddMissingDocuments
+func (mr *MockHashSourceMockRecorder) AddMissingDocuments(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddMissingDocuments", reflect.TypeOf((*MockHashSource)(nil).AddMissingDocuments), arg0)
+}
+
 // HasDocument mocks base method
-func (m *MockHashSource) HasDocument(hash model.Hash) bool {
+func (m *MockHashSource) HasDocument(hash model.Hash) (bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HasDocument", hash)
 	ret0, _ := ret[0].(bool)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // HasDocument indicates an expected call of HasDocument
@@ -220,11 +237,12 @@ func (mr *MockHashSourceMockRecorder) HasDocument(hash interface{}) *gomock.Call
 }
 
 // HasContentsForDocument mocks base method
-func (m *MockHashSource) HasContentsForDocument(hash model.Hash) bool {
+func (m *MockHashSource) HasContentsForDocument(hash model.Hash) (bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HasContentsForDocument", hash)
 	ret0, _ := ret[0].(bool)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // HasContentsForDocument indicates an expected call of HasContentsForDocument
@@ -234,11 +252,12 @@ func (mr *MockHashSourceMockRecorder) HasContentsForDocument(hash interface{}) *
 }
 
 // GetDocument mocks base method
-func (m *MockHashSource) GetDocument(hash model.Hash) *model.Document {
+func (m *MockHashSource) GetDocument(hash model.Hash) (*model.Document, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetDocument", hash)
 	ret0, _ := ret[0].(*model.Document)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetDocument indicates an expected call of GetDocument
@@ -263,9 +282,11 @@ func (mr *MockHashSourceMockRecorder) GetDocumentContents(hash interface{}) *gom
 }
 
 // AddDocument mocks base method
-func (m *MockHashSource) AddDocument(document model.Document) {
+func (m *MockHashSource) AddDocument(document model.Document) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "AddDocument", document)
+	ret := m.ctrl.Call(m, "AddDocument", document)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // AddDocument indicates an expected call of AddDocument
@@ -275,10 +296,10 @@ func (mr *MockHashSourceMockRecorder) AddDocument(document interface{}) *gomock.
 }
 
 // AddDocumentWithContents mocks base method
-func (m *MockHashSource) AddDocumentWithContents(timestamp time.Time, documentType string, contents io.Reader) (model.Document, error) {
+func (m *MockHashSource) AddDocumentWithContents(timestamp time.Time, documentType string, contents io.Reader) (*model.Document, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddDocumentWithContents", timestamp, documentType, contents)
-	ret0, _ := ret[0].(model.Document)
+	ret0, _ := ret[0].(*model.Document)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -290,10 +311,10 @@ func (mr *MockHashSourceMockRecorder) AddDocumentWithContents(timestamp, documen
 }
 
 // AddDocumentContents mocks base method
-func (m *MockHashSource) AddDocumentContents(hash model.Hash, contents io.Reader) (model.Document, error) {
+func (m *MockHashSource) AddDocumentContents(hash model.Hash, contents io.Reader) (*model.Document, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddDocumentContents", hash, contents)
-	ret0, _ := ret[0].(model.Document)
+	ret0, _ := ret[0].(*model.Document)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

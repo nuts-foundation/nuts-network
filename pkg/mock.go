@@ -66,10 +66,10 @@ func (mr *MockNetworkClientMockRecorder) GetDocument(hash interface{}) *gomock.C
 }
 
 // AddDocumentWithContents mocks base method
-func (m *MockNetworkClient) AddDocumentWithContents(timestamp time.Time, docType string, contents []byte) (model.Document, error) {
+func (m *MockNetworkClient) AddDocumentWithContents(timestamp time.Time, docType string, contents []byte) (*model.Document, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddDocumentWithContents", timestamp, docType, contents)
-	ret0, _ := ret[0].(model.Document)
+	ret0, _ := ret[0].(*model.Document)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

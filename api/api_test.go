@@ -22,7 +22,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/labstack/echo/v4"
 	"github.com/nuts-foundation/nuts-network/pkg"
-	"github.com/nuts-foundation/nuts-network/pkg/documentlog"
+	"github.com/nuts-foundation/nuts-network/pkg/documentlog/store"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/test"
 	"github.com/stretchr/testify/assert"
@@ -49,7 +49,7 @@ func TestApiWrapper_AddDocument(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		var networkClient = pkg.NewMockNetworkClient(mockCtrl)
 		e, wrapper := initMockEcho(networkClient)
-		networkClient.EXPECT().AddDocumentWithContents(document.Timestamp, document.Type, documentContents).Return(document, nil)
+		networkClient.EXPECT().AddDocumentWithContents(document.Timestamp, document.Type, documentContents).Return(&document, nil)
 
 		input := DocumentWithContents{
 			Contents:  documentContents,
@@ -134,7 +134,7 @@ func TestApiWrapper_GetDocumentContents(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		var networkClient = pkg.NewMockNetworkClient(mockCtrl)
 		e, wrapper := initMockEcho(networkClient)
-		networkClient.EXPECT().GetDocumentContents(test.EqHash(document.Hash)).Return(documentlog.NoopCloser{Reader: bytes.NewReader(documentContents)}, nil)
+		networkClient.EXPECT().GetDocumentContents(test.EqHash(document.Hash)).Return(store.NoopCloser{Reader: bytes.NewReader(documentContents)}, nil)
 
 		req := httptest.NewRequest(echo.GET, "/", nil)
 		rec := httptest.NewRecorder()

@@ -25,9 +25,12 @@ func Test_DocumentLog_AddDocument(t *testing.T) {
 		}
 		expected.Hash = model.CalculateDocumentHash(expected.Type, expected.Timestamp, []byte{1, 2, 3})
 		log.AddDocument(expected)
-		assert.Len(t, log.Documents(), 1)
-		assert.True(t, log.HasDocument(expected.Hash))
-		assert.False(t, log.HasContentsForDocument(expected.Hash))
+		docs, _ := log.Documents()
+		assert.Len(t, docs, 1)
+		hasDoc, _ := log.HasDocument(expected.Hash)
+		assert.True(t, hasDoc)
+		hasContents, _ := log.HasContentsForDocument(expected.Hash)
+		assert.False(t, hasContents)
 	})
 	t.Run("ok - multiple, random order", func(t *testing.T) {
 		var protocol = proto.NewMockProtocol(mockCtrl)
@@ -41,7 +44,8 @@ func Test_DocumentLog_AddDocument(t *testing.T) {
 			doc.Hash = model.CalculateDocumentHash(doc.Type, doc.Timestamp, []byte{1, 2, 3})
 			log.AddDocument(doc)
 		}
-		assert.Len(t, log.Documents(), count)
+		docs, _ := log.Documents()
+		assert.Len(t, docs, count)
 	})
 	t.Run("ok - already exists", func(t *testing.T) {
 		var protocol = proto.NewMockProtocol(mockCtrl)
@@ -51,10 +55,12 @@ func Test_DocumentLog_AddDocument(t *testing.T) {
 			Timestamp: time.Now(),
 		}
 		expected.Hash = model.CalculateDocumentHash(expected.Type, expected.Timestamp, []byte{1, 2, 3})
-		assert.Len(t, log.Documents(), 0)
+		docs, _ := log.Documents()
+		assert.Len(t, docs, 0)
 		log.AddDocument(expected)
 		log.AddDocument(expected)
-		assert.Len(t, log.Documents(), 1)
+		docs, _ = log.Documents()
+		assert.Len(t, docs, 1)
 	})
 	t.Run("error - already exists, different timestamp", func(t *testing.T) {
 		var protocol = proto.NewMockProtocol(mockCtrl)
@@ -64,11 +70,13 @@ func Test_DocumentLog_AddDocument(t *testing.T) {
 			Timestamp: time.Now(),
 		}
 		expected.Hash = model.CalculateDocumentHash(expected.Type, expected.Timestamp, []byte{1, 2, 3})
-		assert.Len(t, log.Documents(), 0)
+		documents, _ := log.Documents()
+		assert.Len(t, documents, 0)
 		log.AddDocument(expected)
 		expected.Timestamp = time.Time{}
 		log.AddDocument(expected)
-		assert.Len(t, log.Documents(), 1)
+		documents, _ = log.Documents()
+		assert.Len(t, documents, 1)
 	})
 }
 
@@ -85,7 +93,8 @@ func Test_DocumentLog_AddDocumentWithContents(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, timestamp, document.Timestamp)
 		assert.Equal(t, "test", document.Type)
-		assert.Len(t, log.Documents(), 1)
+		documents, _ := log.Documents()
+		assert.Len(t, documents, 1)
 		// Assert that we can retrieve the contents
 		actual, err := log.GetDocumentContents(document.Hash)
 		if !assert.NoError(t, err) {

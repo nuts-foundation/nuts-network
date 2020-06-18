@@ -87,7 +87,7 @@ func (hb HttpClient) GetDocument(hash model.Hash) (*model.Document, error) {
 	return testAndParseDocumentResponse(res)
 }
 
-func (hb HttpClient) AddDocumentWithContents(timestamp time.Time, docType string, contents []byte) (model.Document, error) {
+func (hb HttpClient) AddDocumentWithContents(timestamp time.Time, docType string, contents []byte) (*model.Document, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), hb.Timeout)
 	defer cancel()
 	res, err := hb.client().AddDocument(ctx, AddDocumentJSONRequestBody{
@@ -96,13 +96,13 @@ func (hb HttpClient) AddDocumentWithContents(timestamp time.Time, docType string
 		Type:      docType,
 	})
 	if err != nil {
-		return model.Document{}, err
+		return nil, err
 	}
-	documentPtr, err := testAndParseDocumentResponse(res)
-	if err != nil || documentPtr == nil {
-		return model.Document{}, err
+	document, err := testAndParseDocumentResponse(res)
+	if err != nil || document == nil {
+		return nil, err
 	}
-	return *documentPtr, err
+	return document, err
 }
 
 func (hb HttpClient) client() ClientInterface {

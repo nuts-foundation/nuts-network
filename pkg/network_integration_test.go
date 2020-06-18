@@ -98,9 +98,12 @@ func TestNetwork(t *testing.T) {
 	expectedDocLogSize++
 
 	// Assert documentLog sizes
-	assert.Len(t, bootstrap.documentLog.Documents(), expectedDocLogSize)
-	assert.Len(t, node1.documentLog.Documents(), expectedDocLogSize)
-	assert.Len(t, node2.documentLog.Documents(), expectedDocLogSize)
+	bootstrapDocs, _ := bootstrap.documentLog.Documents()
+	assert.Len(t, bootstrapDocs, expectedDocLogSize)
+	node1Docs, _ := node1.documentLog.Documents()
+	assert.Len(t, node1Docs, expectedDocLogSize)
+	node2Docs, _ := node2.documentLog.Documents()
+	assert.Len(t, node2Docs, expectedDocLogSize)
 
 	// Can we request the diagnostics?
 	fmt.Printf("%v\n", bootstrap.Diagnostics())
@@ -122,7 +125,7 @@ func addDocumentAndWaitForItToArrive(t *testing.T, sender *Network, receiver *Ne
 	}
 	addedDocument.Timestamp = addedDocument.Timestamp.UTC()
 	receivedDocument.Timestamp = receivedDocument.Timestamp.UTC()
-	assert.Equal(t, addedDocument, receivedDocument)
+	assert.Equal(t, *addedDocument, receivedDocument)
 	return false
 }
 
