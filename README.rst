@@ -63,10 +63,10 @@ To generate the mocks, run the following commands:
 .. code-block:: shell
 
     ~/go/bin/mockgen -destination=pkg/mock.go -package=pkg -source=pkg/interface.go
-    ~/go/bin/mockgen -destination=pkg/proto/mock.go -package=mock -source=pkg/proto/interface.go Protocol
-    ~/go/bin/mockgen -destination=pkg/documentlog/mock.go -package=mock -source=pkg/documentlog/interface.go DocumentLog
-    ~/go/bin/mockgen -destination=pkg/nodelist/mock.go -package=mock -source=pkg/nodelist/interface.go NodeList
-    ~/go/bin/mockgen -destination=pkg/p2p/mock.go -package=mock -source=pkg/p2p/interface.go P2PNetwork
+    ~/go/bin/mockgen -destination=pkg/proto/mock.go -package=proto -source=pkg/proto/interface.go Protocol
+    ~/go/bin/mockgen -destination=pkg/documentlog/mock.go -package=documentlog -source=pkg/documentlog/interface.go DocumentLog
+    ~/go/bin/mockgen -destination=pkg/nodelist/mock.go -package=nodelist -source=pkg/nodelist/interface.go NodeList
+    ~/go/bin/mockgen -destination=pkg/p2p/mock.go -package=p2p -source=pkg/p2p/interface.go P2PNetwork
 
 Running in Docker
 *****************
@@ -114,7 +114,7 @@ network.grpcAddr                         :5555                           Local a
 network.bootstrapNodes                                                   Space-separated list of bootstrap nodes (`<host>:<port>`) which the node initially connect to.
 network.publicAddr                                                       Public address (of this node) other nodes can use to connect to it. If set, it is registered on the nodelist.
 network.nodeID                                                           Instance ID of this node under which the public address is registered on the nodelist. If not set, the Nuts node's identity will be used.
-network.certFile                                                         PEM file containing the certificate this node will identify itself with to other nodes.
-network.certKeyFile                                                      PEM file containing the key belonging to this node's certificate.
+network.certFile                                                         PEM file containing the certificate this node will identify itself with to other nodes. If not set, the Nuts node will attempt to load a TLS certificate from the crypto module.
+network.certKeyFile                                                      PEM file containing the key belonging to this node's certificate. If not set, the Nuts node will attempt to load a TLS certificate from the crypto module.
 ====================================     ============================    =============================================================================================================
 
