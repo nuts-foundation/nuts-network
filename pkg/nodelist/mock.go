@@ -33,16 +33,28 @@ func (m *MockNodeList) EXPECT() *MockNodeListMockRecorder {
 	return m.recorder
 }
 
-// Start mocks base method
-func (m *MockNodeList) Start(nodeID model.NodeID, address string) {
+// Configure mocks base method
+func (m *MockNodeList) Configure(nodeID model.NodeID, address string) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Start", nodeID, address)
+	m.ctrl.Call(m, "Configure", nodeID, address)
+}
+
+// Configure indicates an expected call of Configure
+func (mr *MockNodeListMockRecorder) Configure(nodeID, address interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Configure", reflect.TypeOf((*MockNodeList)(nil).Configure), nodeID, address)
+}
+
+// Start mocks base method
+func (m *MockNodeList) Start() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Start")
 }
 
 // Start indicates an expected call of Start
-func (mr *MockNodeListMockRecorder) Start(nodeID, address interface{}) *gomock.Call {
+func (mr *MockNodeListMockRecorder) Start() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockNodeList)(nil).Start), nodeID, address)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockNodeList)(nil).Start))
 }
 
 // Stop mocks base method

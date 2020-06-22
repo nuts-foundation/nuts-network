@@ -15,7 +15,7 @@ func (p *protocol) handleAdvertHash(peer model.PeerID, advertHash *network.Adver
 		Hash: advertHash.Hash,
 	}
 	p.newPeerHashChannel <- peerHash
-	p.receivedConsistencyHashes.internal.Add(peerHash)
+	p.receivedConsistencyHashes.c <- &peerHash
 }
 
 func (p *protocol) handleDocumentContents(peer model.PeerID, contents *network.DocumentContents) {
@@ -72,23 +72,32 @@ func (p *protocol) handleHashList(peer model.PeerID, hashList *network.HashList)
 			Hash:      current.Hash,
 		}
 	}
-	missingContentHashes, err := p.hashSource.AddMissingDocuments(documents)
-	if err != nil {
-		return err
-	}
-	if len(missingContentHashes) > 0 {
-		// TODO: Currently we send the query to the peer that send us the hash, but this peer might not have the
-		//   document contents. We need a smarter way to get it from a peer who does.
-		log.Log().Infof("Document hashes from peer that we don't have yet, will query it (peer=%s,hashes=%v)", peer, missingContentHashes)
-		for _, hash := range missingContentHashes {
-			responseMsg := createMessage()
-			responseMsg.DocumentContentsQuery = &network.DocumentContentsQuery{Hash: hash}
-			if err := p.p2pNetwork.Send(peer, &responseMsg); err != nil {
-				return err
-			}
+	for _, document := range documents {
+		if err := p.checkDocumentOnLocalNode(peer, document); err != nil {
+			log.Log().Errorf("Error while checking peer document on local node (peer=%s, document=%s): %v", peer, document.Hash, err)
 		}
 	}
 	return nil
+}
+
+func (p *protocol) checkDocumentOnLocalNode(peer model.PeerID, peerDocument model.Document) error {
+	localDocument, err := p.hashSource.GetDocument(peerDocument.Hash)
+	if err != nil {
+		return err
+	}
+	if localDocument != nil && localDocument.HasContents {
+		return nil
+	} else if localDocument == nil {
+		if err := p.hashSource.AddDocument(peerDocument); err != nil {
+			return err
+		}
+	}
+	// TODO: Currently we send the query to the peer that send us the hash, but this peer might not have the
+	//   document contents. We need a smarter way to get it from a peer who does.
+	log.Log().Infof("Received document hash from peer that we don't have yet or we're missing its contents, will query it (peer=%s,hash=%s)", peer, peerDocument.Hash)
+	responseMsg := createMessage()
+	responseMsg.DocumentContentsQuery = &network.DocumentContentsQuery{Hash: peerDocument.Hash}
+	return p.p2pNetwork.Send(peer, &responseMsg)
 }
 
 func (p *protocol) handleHashListQuery(peer model.PeerID) error {

@@ -26,7 +26,7 @@ import (
 	"github.com/nuts-foundation/nuts-network/api"
 	"github.com/nuts-foundation/nuts-network/client"
 	logging "github.com/nuts-foundation/nuts-network/logging"
-	pkg "github.com/nuts-foundation/nuts-network/pkg"
+	"github.com/nuts-foundation/nuts-network/pkg"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -86,12 +86,11 @@ func Cmd() *cobra.Command {
 		Use:   "server",
 		Short: "Run standalone api server",
 		Run: func(cmd *cobra.Command, args []string) {
-			// TODO
-			echo := echo.New()
-			echo.HideBanner = true
-			echo.Use(middleware.Logger())
-			core.NewStatusEngine().Routes(echo)
-			api.RegisterHandlers(echo, &api.ApiWrapper{Service: pkg.NetworkInstance()})
+			echoInstance := echo.New()
+			echoInstance.HideBanner = true
+			echoInstance.Use(middleware.Logger())
+			core.NewStatusEngine().Routes(echoInstance)
+			api.RegisterHandlers(echoInstance, &api.ApiWrapper{Service: pkg.NetworkInstance()})
 
 			// todo move to nuts-go-core
 			sigc := make(chan os.Signal, 1)
@@ -101,7 +100,7 @@ func Cmd() *cobra.Command {
 				defer func() {
 					recover()
 				}()
-				echo.Start(core.NutsConfig().ServerAddress())
+				echoInstance.Start(core.NutsConfig().ServerAddress())
 			}
 
 			go recoverFromEcho()

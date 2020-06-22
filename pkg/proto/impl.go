@@ -32,8 +32,8 @@ type protocol struct {
 	p2pNetwork p2p.P2PNetwork
 	hashSource HashSource
 	// TODO: What if no-one is actually listening to this queue? Maybe we should create it when someone asks for it (lazy initialization)?
-	receivedConsistencyHashes *AdvertedHashQueue
-	receivedDocumentHashes    *AdvertedHashQueue
+	receivedConsistencyHashes *chanPeerHashQueue
+	receivedDocumentHashes    *chanPeerHashQueue
 	peerHashes                map[model.PeerID]model.Hash
 
 	// Cache statistics to avoid having to lock precious resources
@@ -49,37 +49,33 @@ func (p *protocol) Statistics() []stats.Statistic {
 
 func NewProtocol() Protocol {
 	p := &protocol{
-		receivedConsistencyHashes: &AdvertedHashQueue{},
-		receivedDocumentHashes:    &AdvertedHashQueue{},
+		// TODO: Does these numbers make sense?
+		receivedConsistencyHashes: &chanPeerHashQueue{c: make(chan *PeerHash, 100)},
 
 		peerHashes:         make(map[model.PeerID]model.Hash),
 		newPeerHashChannel: make(chan PeerHash, 100),
 
 		peerConsistencyHashStatistic: newPeerConsistencyHashStatistic(),
 	}
-	// TODO: Does these numbers make sense?
-	p.receivedConsistencyHashes.internal.Init(100)
-	p.receivedDocumentHashes.internal.Init(1000)
 	return p
 }
 
-func (p *protocol) Start(p2pNetwork p2p.P2PNetwork, hashSource HashSource) {
+func (p *protocol) Configure(p2pNetwork p2p.P2PNetwork, hashSource HashSource) {
 	p.p2pNetwork = p2pNetwork
 	p.hashSource = hashSource
+}
+
+func (p *protocol) Start() {
 	go p.consumeMessages(p.p2pNetwork.ReceivedMessages())
 	go p.updateDiagnostics()
 }
 
 func (p protocol) Stop() {
-
+	close(p.receivedConsistencyHashes.c)
 }
 
 func (p protocol) ReceivedConsistencyHashes() PeerHashQueue {
 	return p.receivedConsistencyHashes
-}
-
-func (p protocol) ReceivedDocumentHashes() PeerHashQueue {
-	return p.receivedDocumentHashes
 }
 
 func (p protocol) AdvertConsistencyHash(hash model.Hash) {
@@ -103,7 +99,7 @@ func (p *protocol) updateDiagnostics() {
 			// TODO: Make this garbage collection less dumb. Maybe we should be notified of disconnects rather than looping each time
 			connectedPeers := p.p2pNetwork.Peers()
 			var changed = false
-			for peerId, _ := range p.peerHashes {
+			for peerId := range p.peerHashes {
 				var present = false
 				for _, connectedPeer := range connectedPeers {
 					if peerId == connectedPeer.PeerID {

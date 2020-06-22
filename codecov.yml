@@ -1,4 +1,5 @@
 ignore:
   - "api/generated.go"
   - "test/*"
+  - "migrations/*"
   - "**/mock.go"

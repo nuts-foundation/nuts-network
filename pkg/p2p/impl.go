@@ -186,7 +186,7 @@ func (m messageQueue) Get() PeerMessage {
 	return <-m.c
 }
 
-func (n *p2pNetwork) Start(config P2PNetworkConfig) error {
+func (n *p2pNetwork) Configure(config P2PNetworkConfig) error {
 	if config.NodeID == "" {
 		return errors.New("NodeID is empty")
 	}
@@ -196,19 +196,23 @@ func (n *p2pNetwork) Start(config P2PNetworkConfig) error {
 	if config.TrustStore == nil {
 		return errors.New("TrustStore is nil")
 	}
-	log.Log().Infof("Starting gRPC server (ID: %s) on %s", config.NodeID, config.ListenAddress)
 	n.config = config
+	return nil
+}
+
+func (n *p2pNetwork) Start() error {
+	log.Log().Infof("Starting gRPC server (ID: %s) on %s", n.config.NodeID, n.config.ListenAddress)
 	var err error
 	// We allow test code to set the listener to allow for in-memory (bufnet) channels
 	var serverOpts = make([]grpc.ServerOption, 0)
 	if n.listener == nil {
-		n.listener, err = net.Listen("tcp", config.ListenAddress)
+		n.listener, err = net.Listen("tcp", n.config.ListenAddress)
 		if err != nil {
 			return err
 		}
 		// TODO: Verify TLS configuration
 		serverOpts = append(serverOpts, grpc.Creds(credentials.NewTLS(&tls.Config{
-			Certificates: []tls.Certificate{config.ServerCert},
+			Certificates: []tls.Certificate{n.config.ServerCert},
 			ClientAuth:   tls.RequireAndVerifyClientCert,
 			ClientCAs:    n.config.TrustStore.Pool(),
 		})))

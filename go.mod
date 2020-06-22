@@ -4,10 +4,13 @@ go 1.13
 
 require (
 	github.com/deepmap/oapi-codegen v1.3.8
+	github.com/golang-migrate/migrate/v4 v4.11.0
 	github.com/golang/mock v1.4.3
 	github.com/golang/protobuf v1.4.2
+	github.com/jinzhu/gorm v1.9.14
 	github.com/labstack/echo v3.3.10+incompatible // indirect
 	github.com/labstack/echo/v4 v4.1.16
+	github.com/mattn/go-sqlite3 v2.0.3+incompatible
 	github.com/nuts-foundation/nuts-crypto v0.13.2-0.20200617110723-b89e64874b6e
 	github.com/nuts-foundation/nuts-go-core v0.13.1-0.20200422145233-a9d171e8b054
 	github.com/pkg/errors v0.9.1

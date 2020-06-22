@@ -5,7 +5,6 @@
 package proto
 
 import (
-	context "context"
 	gomock "github.com/golang/mock/gomock"
 	model "github.com/nuts-foundation/nuts-network/pkg/model"
 	p2p "github.com/nuts-foundation/nuts-network/pkg/p2p"
@@ -52,16 +51,28 @@ func (mr *MockProtocolMockRecorder) Statistics() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Statistics", reflect.TypeOf((*MockProtocol)(nil).Statistics))
 }
 
-// Start mocks base method
-func (m *MockProtocol) Start(p2pNetwork p2p.P2PNetwork, source HashSource) {
+// Configure mocks base method
+func (m *MockProtocol) Configure(p2pNetwork p2p.P2PNetwork, source HashSource) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Start", p2pNetwork, source)
+	m.ctrl.Call(m, "Configure", p2pNetwork, source)
+}
+
+// Configure indicates an expected call of Configure
+func (mr *MockProtocolMockRecorder) Configure(p2pNetwork, source interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Configure", reflect.TypeOf((*MockProtocol)(nil).Configure), p2pNetwork, source)
+}
+
+// Start mocks base method
+func (m *MockProtocol) Start() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Start")
 }
 
 // Start indicates an expected call of Start
-func (mr *MockProtocolMockRecorder) Start(p2pNetwork, source interface{}) *gomock.Call {
+func (mr *MockProtocolMockRecorder) Start() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockProtocol)(nil).Start), p2pNetwork, source)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockProtocol)(nil).Start))
 }
 
 // Stop mocks base method
@@ -88,20 +99,6 @@ func (m *MockProtocol) ReceivedConsistencyHashes() PeerHashQueue {
 func (mr *MockProtocolMockRecorder) ReceivedConsistencyHashes() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReceivedConsistencyHashes", reflect.TypeOf((*MockProtocol)(nil).ReceivedConsistencyHashes))
-}
-
-// ReceivedDocumentHashes mocks base method
-func (m *MockProtocol) ReceivedDocumentHashes() PeerHashQueue {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ReceivedDocumentHashes")
-	ret0, _ := ret[0].(PeerHashQueue)
-	return ret0
-}
-
-// ReceivedDocumentHashes indicates an expected call of ReceivedDocumentHashes
-func (mr *MockProtocolMockRecorder) ReceivedDocumentHashes() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReceivedDocumentHashes", reflect.TypeOf((*MockProtocol)(nil).ReceivedDocumentHashes))
 }
 
 // AdvertConsistencyHash mocks base method
@@ -154,18 +151,17 @@ func (m *MockPeerHashQueue) EXPECT() *MockPeerHashQueueMockRecorder {
 }
 
 // Get mocks base method
-func (m *MockPeerHashQueue) Get(cxt context.Context) (PeerHash, error) {
+func (m *MockPeerHashQueue) Get() *PeerHash {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", cxt)
-	ret0, _ := ret[0].(PeerHash)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "Get")
+	ret0, _ := ret[0].(*PeerHash)
+	return ret0
 }
 
 // Get indicates an expected call of Get
-func (mr *MockPeerHashQueueMockRecorder) Get(cxt interface{}) *gomock.Call {
+func (mr *MockPeerHashQueueMockRecorder) Get() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockPeerHashQueue)(nil).Get), cxt)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockPeerHashQueue)(nil).Get))
 }
 
 // MockHashSource is a mock of HashSource interface
@@ -192,10 +188,10 @@ func (m *MockHashSource) EXPECT() *MockHashSourceMockRecorder {
 }
 
 // Documents mocks base method
-func (m *MockHashSource) Documents() ([]model.Document, error) {
+func (m *MockHashSource) Documents() ([]model.DocumentDescriptor, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Documents")
-	ret0, _ := ret[0].([]model.Document)
+	ret0, _ := ret[0].([]model.DocumentDescriptor)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -206,34 +202,18 @@ func (mr *MockHashSourceMockRecorder) Documents() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Documents", reflect.TypeOf((*MockHashSource)(nil).Documents))
 }
 
-// AddMissingDocuments mocks base method
-func (m *MockHashSource) AddMissingDocuments(arg0 []model.Document) ([]model.Hash, error) {
+// AddDocument mocks base method
+func (m *MockHashSource) AddDocument(arg0 model.Document) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddMissingDocuments", arg0)
-	ret0, _ := ret[0].([]model.Hash)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "AddDocument", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
-// AddMissingDocuments indicates an expected call of AddMissingDocuments
-func (mr *MockHashSourceMockRecorder) AddMissingDocuments(arg0 interface{}) *gomock.Call {
+// AddDocument indicates an expected call of AddDocument
+func (mr *MockHashSourceMockRecorder) AddDocument(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddMissingDocuments", reflect.TypeOf((*MockHashSource)(nil).AddMissingDocuments), arg0)
-}
-
-// HasDocument mocks base method
-func (m *MockHashSource) HasDocument(hash model.Hash) (bool, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HasDocument", hash)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// HasDocument indicates an expected call of HasDocument
-func (mr *MockHashSourceMockRecorder) HasDocument(hash interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasDocument", reflect.TypeOf((*MockHashSource)(nil).HasDocument), hash)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddDocument", reflect.TypeOf((*MockHashSource)(nil).AddDocument), arg0)
 }
 
 // HasContentsForDocument mocks base method
@@ -252,10 +232,10 @@ func (mr *MockHashSourceMockRecorder) HasContentsForDocument(hash interface{}) *
 }
 
 // GetDocument mocks base method
-func (m *MockHashSource) GetDocument(hash model.Hash) (*model.Document, error) {
+func (m *MockHashSource) GetDocument(hash model.Hash) (*model.DocumentDescriptor, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetDocument", hash)
-	ret0, _ := ret[0].(*model.Document)
+	ret0, _ := ret[0].(*model.DocumentDescriptor)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -279,20 +259,6 @@ func (m *MockHashSource) GetDocumentContents(hash model.Hash) (io.ReadCloser, er
 func (mr *MockHashSourceMockRecorder) GetDocumentContents(hash interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDocumentContents", reflect.TypeOf((*MockHashSource)(nil).GetDocumentContents), hash)
-}
-
-// AddDocument mocks base method
-func (m *MockHashSource) AddDocument(document model.Document) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddDocument", document)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// AddDocument indicates an expected call of AddDocument
-func (mr *MockHashSourceMockRecorder) AddDocument(document interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddDocument", reflect.TypeOf((*MockHashSource)(nil).AddDocument), document)
 }
 
 // AddDocumentWithContents mocks base method

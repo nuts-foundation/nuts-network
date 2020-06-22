@@ -51,8 +51,19 @@ To generate the mocks, run the following commands:
     ~/go/bin/mockgen -destination=pkg/mock.go -package=pkg -source=pkg/interface.go
     ~/go/bin/mockgen -destination=pkg/proto/mock.go -package=proto -source=pkg/proto/interface.go Protocol
     ~/go/bin/mockgen -destination=pkg/documentlog/mock.go -package=documentlog -source=pkg/documentlog/interface.go DocumentLog
+    ~/go/bin/mockgen -destination=pkg/documentlog/store/mock.go -package=store -source=pkg/documentlog/store/interface.go DocumentStore
     ~/go/bin/mockgen -destination=pkg/nodelist/mock.go -package=nodelist -source=pkg/nodelist/interface.go NodeList
     ~/go/bin/mockgen -destination=pkg/p2p/mock.go -package=p2p -source=pkg/p2p/interface.go P2PNetwork
+
+Binary format migrations
+------------------------
+
+The database migrations are packaged with the binary by using the ``go-bindata`` package.
+
+.. code-block:: shell
+
+    NOT_IN_PROJECT $ go get -u github.com/go-bindata/go-bindata/...
+    nuts-network $ cd migrations && go-bindata -pkg migrations .
 
 Running in Docker
 *****************

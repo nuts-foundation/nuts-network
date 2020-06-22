@@ -44,7 +44,7 @@ func (a ApiWrapper) ListDocuments(ctx echo.Context) error {
 	results := make([]Document, len(documents))
 	for i, document := range documents {
 		results[i] = Document{}
-		results[i].fromModel(document)
+		results[i].fromModel(document.Document)
 	}
 	return ctx.JSON(http.StatusOK, results)
 }
@@ -62,7 +62,7 @@ func (a ApiWrapper) GetDocument(ctx echo.Context, hashAsString string) error {
 	if document == nil {
 		return ctx.String(http.StatusNotFound, "document not found")
 	}
-	return writeDocument(ctx, http.StatusOK, *document)
+	return writeDocument(ctx, http.StatusOK, document.Document)
 }
 
 func (a ApiWrapper) GetDocumentContents(ctx echo.Context, hashAsString string) error {

@@ -20,7 +20,6 @@ package nodelist
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	log "github.com/nuts-foundation/nuts-network/logging"
@@ -35,42 +34,42 @@ const nodeInfoDocumentType = "node-info"
 type nodeList struct {
 	documentLog documentlog.DocumentLog
 	p2pNetwork  p2p.P2PNetwork
-	publicAddr  string
-	cxt         context.Context
-	cxtCancel   context.CancelFunc
+	localNode   model.NodeInfo
 }
 
-func (n *nodeList) Start(nodeID model.NodeID, publicAddr string) {
+func (n *nodeList) Stop() {
+
+}
+
+func (n *nodeList) Configure(nodeID model.NodeID, publicAddr string) {
+	n.localNode = model.NodeInfo{
+		ID:      nodeID,
+		Address: publicAddr,
+	}
+}
+
+func (n *nodeList) Start() {
 	// TODO: Test if already registered by examining local copy to avoid creating waste (duplicate documents) on the network.
 	//  If not in the local copy, we should not autoregister our node but this should be done via a command.
 	//  This process can be made easier by registering our node info when `registry register-vendor` is executed.
-	if publicAddr != "" {
-		n.publicAddr = publicAddr
-		log.Log().Infof("Registering local node on nodelist (id=%s,addr=%s)", nodeID, publicAddr)
-		data, _ := json.Marshal(model.NodeInfo{ID: nodeID, Address: publicAddr})
+	if n.localNode.Address != "" {
+		log.Log().Infof("Registering local node on nodelist: %s", n.localNode)
+		data, _ := json.Marshal(n.localNode)
 		if _, err := n.documentLog.AddDocumentWithContents(time.Now(), nodeInfoDocumentType, bytes.NewReader(data)); err != nil {
 			// TODO: Shouldn't this be blocking?
 			log.Log().Errorf("Error while adding document with contents: %v", err)
 		}
 	}
-	n.cxt, n.cxtCancel = context.WithCancel(context.Background())
-
-	documentQueue := n.documentLog.Subscribe(nodeInfoDocumentType)
-	go n.consumeNodeInfoFromQueue(documentQueue)
-}
-
-func (n nodeList) Stop() {
-	n.cxtCancel()
+	go n.consumeNodeInfoFromQueue(n.documentLog.Subscribe(nodeInfoDocumentType))
 }
 
 func (n *nodeList) consumeNodeInfoFromQueue(queue documentlog.DocumentQueue) {
 	for {
-		document, err := queue.Get(n.cxt)
-		if err != nil {
-			log.Log().Debugf("Get cancelled: %v", err)
+		document := queue.Get()
+		if document == nil {
 			return
 		}
-		if err := n.consumeNodeInfo(document); err != nil {
+		if err := n.consumeNodeInfo(*document); err != nil {
 			log.Log().Errorf("Error while processing nodelist document (hash=%s): %v", document.Hash, err)
 		}
 	}

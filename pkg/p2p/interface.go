@@ -27,18 +27,24 @@ import (
 	"github.com/nuts-foundation/nuts-network/pkg/stats"
 )
 
+// P2PNetwork defines the API for the P2P layer, used to connect to peers and exchange messages.
 type P2PNetwork interface {
 	stats.StatsProvider
+	// Configure configures the P2PNetwork. Must be called before Start().
+	Configure(config P2PNetworkConfig) error
 	// Start starts the P2P network on the local node.
-	Start(config P2PNetworkConfig) error
+	Start() error
 	// Stop stops the P2P network on the local node.
 	Stop() error
 	// AddRemoteNode adds a remote node to the local node's view of the network, so it can become one of our peers.
 	AddRemoteNode(node model.NodeInfo)
+	// ReceivedMessages returns a queue containing all messages received from our peers. It must be drained, because when its buffer is full the producer (P2PNetwork) is blocked.
 	ReceivedMessages() MessageQueue
+	// Send sends a message to a specific peer.
 	Send(peer model.PeerID, message *network.NetworkMessage) error
+	// Broadcast sends a message to all peers.
 	Broadcast(message *network.NetworkMessage)
-	// Peers returns the peers we're currently connected to
+	// Peers returns our peers (remote nodes we're currently connected to).
 	Peers() []Peer
 }
 
@@ -65,10 +71,11 @@ type PeerMessage struct {
 }
 
 type P2PNetworkConfig struct {
-	NodeID        model.NodeID
-	PublicAddress string
-	ListenAddress string
-	ClientCert    tls.Certificate
-	ServerCert    tls.Certificate
-	TrustStore    cert.TrustStore
+	NodeID         model.NodeID
+	PublicAddress  string
+	ListenAddress  string
+	BootstrapNodes []string
+	ClientCert     tls.Certificate
+	ServerCert     tls.Certificate
+	TrustStore     cert.TrustStore
 }

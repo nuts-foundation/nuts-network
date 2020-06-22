@@ -51,10 +51,10 @@ func (mr *MockNetworkClientMockRecorder) GetDocumentContents(hash interface{}) *
 }
 
 // GetDocument mocks base method
-func (m *MockNetworkClient) GetDocument(hash model.Hash) (*model.Document, error) {
+func (m *MockNetworkClient) GetDocument(hash model.Hash) (*model.DocumentDescriptor, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetDocument", hash)
-	ret0, _ := ret[0].(*model.Document)
+	ret0, _ := ret[0].(*model.DocumentDescriptor)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -81,10 +81,10 @@ func (mr *MockNetworkClientMockRecorder) AddDocumentWithContents(timestamp, docT
 }
 
 // ListDocuments mocks base method
-func (m *MockNetworkClient) ListDocuments() ([]model.Document, error) {
+func (m *MockNetworkClient) ListDocuments() ([]model.DocumentDescriptor, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListDocuments")
-	ret0, _ := ret[0].([]model.Document)
+	ret0, _ := ret[0].([]model.DocumentDescriptor)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

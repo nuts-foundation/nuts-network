@@ -93,7 +93,7 @@ func TestApiWrapper_GetDocument(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		var networkClient = pkg.NewMockNetworkClient(mockCtrl)
 		e, wrapper := initMockEcho(networkClient)
-		networkClient.EXPECT().GetDocument(test.EqHash(document.Hash)).Return(&document, nil)
+		networkClient.EXPECT().GetDocument(test.EqHash(document.Hash)).Return(&model.DocumentDescriptor{Document: document}, nil)
 
 		req := httptest.NewRequest(echo.GET, "/", nil)
 		rec := httptest.NewRecorder()
@@ -175,7 +175,7 @@ func TestApiWrapper_ListDocuments(t *testing.T) {
 		t.Run("200", func(t *testing.T) {
 			var networkClient = pkg.NewMockNetworkClient(mockCtrl)
 			e, wrapper := initMockEcho(networkClient)
-			networkClient.EXPECT().ListDocuments().Return([]model.Document{document}, nil)
+			networkClient.EXPECT().ListDocuments().Return([]model.DocumentDescriptor{{Document: document}}, nil)
 
 			req := httptest.NewRequest(echo.GET, "/", nil)
 			rec := httptest.NewRecorder()

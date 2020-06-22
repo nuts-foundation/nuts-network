@@ -20,7 +20,6 @@ package documentlog
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	log "github.com/nuts-foundation/nuts-network/logging"
@@ -43,7 +42,6 @@ var ErrUnknownDocument = errors.New("unknown document")
 func NewDocumentLog(protocol proto.Protocol) DocumentLog {
 	documentLog := &documentLog{
 		protocol:            protocol,
-		store:               store.NewMemoryDocumentStore(),
 		subscriptions:       make(map[string]documentQueue, 0),
 		subscriptionsMutex:  concurrency.NewSaferRWMutex("doclog-subs"),
 		lastConsistencyHash: &atomic.Value{},
@@ -60,8 +58,6 @@ type documentLog struct {
 	subscriptions       map[string]documentQueue
 	subscriptionsMutex  concurrency.SaferRWMutex
 	publicAddr          string
-	cxt                 context.Context
-	cxtCancel           context.CancelFunc
 	advertHashTimer     *time.Ticker
 	lastConsistencyHash *atomic.Value
 }
@@ -74,28 +70,23 @@ func (dl *documentLog) Statistics() []stats.Statistic {
 	}
 }
 
-func (dl *documentLog) Configure(publicAddr string) {
-	dl.publicAddr = publicAddr
+func (dl *documentLog) Configure(store store.DocumentStore) {
+	dl.store = store
 }
 
 func (dl *documentLog) Subscribe(documentType string) DocumentQueue {
-	queue := documentQueue{documentType: documentType}
-	queue.internal.Init(100) // TODO: Does this number make sense?
+	queue := documentQueue{
+		documentType: documentType,
+		c:            make(chan *model.Document, 100), // TODO: Does this number make sense?
+	}
 	dl.subscriptionsMutex.WriteLock(func() {
 		dl.subscriptions[documentType] = queue
 	})
 	return &queue
 }
 
-func (dl documentLog) GetDocument(hash model.Hash) (*model.Document, error) {
-	document, err := dl.store.Get(hash)
-	if err != nil {
-		return nil, err
-	}
-	if document == nil {
-		return nil, ErrUnknownDocument
-	}
-	return &document.Document, nil
+func (dl documentLog) GetDocument(hash model.Hash) (*model.DocumentDescriptor, error) {
+	return dl.store.Get(hash)
 }
 
 func (dl documentLog) GetDocumentContents(hash model.Hash) (io.ReadCloser, error) {
@@ -106,41 +97,9 @@ func (dl documentLog) GetDocumentContents(hash model.Hash) (io.ReadCloser, error
 	return contents, err
 }
 
-func (dl *documentLog) AddMissingDocuments(documents []model.Document) ([]model.Hash, error) {
-	currentDocuments, err := dl.store.GetAll()
-	if err != nil {
-		return nil, err
-	}
-	missingContentHashes := make([]model.Hash, 0)
-	// This nested loop looks extremely inefficient but since both slices are sorted it should be relatively efficient in practice
-	for _, document := range documents {
-		exists := false
-		hasContents := false
-		for _, current := range currentDocuments {
-			if document.Hash.Equals(current.Hash) {
-				hasContents = current.HasContents
-				exists = true
-				break
-			}
-		}
-		if !exists {
-			if err := dl.AddDocument(document); err != nil {
-				return nil, err
-			}
-		}
-		if !hasContents {
-			missingContentHashes = append(missingContentHashes, document.Hash)
-		}
-	}
-	return missingContentHashes, nil
-}
-
-func (dl *documentLog) HasDocument(hash model.Hash) (bool, error) {
-	document, err := dl.store.Get(hash)
-	if err != nil {
-		return false, err
-	}
-	return document != nil, nil
+func (dl *documentLog) AddDocument(document model.Document) error {
+	_, err := dl.store.Add(document)
+	return err
 }
 
 func (dl *documentLog) HasContentsForDocument(hash model.Hash) (bool, error) {
@@ -164,18 +123,13 @@ func (dl *documentLog) AddDocumentWithContents(timestamp time.Time, documentType
 		Type:      documentType,
 		Timestamp: timestamp,
 	}
-	if hasContents, err := dl.HasContentsForDocument(document.Hash); err != nil {
-		return nil, err
-	} else if hasContents {
-		return nil, fmt.Errorf("document already exists (with content) for hash: %s", document.Hash)
-	}
-	if err := dl.AddDocument(document); err != nil {
+	if err := dl.addDocument(document); err != nil {
 		return nil, err
 	}
 	return dl.AddDocumentContents(document.Hash, buffer)
 }
 
-func (dl *documentLog) AddDocument(document model.Document) error {
+func (dl *documentLog) addDocument(document model.Document) error {
 	existing, err := dl.store.Get(document.Hash)
 	if err != nil {
 		return err
@@ -202,37 +156,36 @@ func (dl *documentLog) AddDocumentContents(hash model.Hash, contents io.Reader) 
 		return nil, err
 	} else if document == nil {
 		return nil, ErrUnknownDocument
+	} else if document.HasContents {
+		log.Log().Debugf("Ignoring AddDocumentContents()  for document %s since we already have its contents", document.Hash)
+		return &document.Document, nil
 	}
 	if err := dl.store.WriteContents(hash, contents); err != nil {
 		return nil, errors2.Wrap(err, "unable to write document contents")
 	}
 	dl.subscriptionsMutex.ReadLock(func() {
 		if queue, ok := dl.subscriptions[document.Type]; ok {
-			queue.internal.Add(document.Document)
+			clone := document.Document.Clone()
+			queue.c <- &clone
 		}
 	})
 	return &document.Document, nil
 }
 
-func (dl *documentLog) Documents() ([]model.Document, error) {
-	documents, err := dl.store.GetAll()
-	if err != nil {
-		return nil, err
-	}
-	var results = make([]model.Document, len(documents))
-	for i, document := range documents {
-		results[i] = document.Document
-	}
-	return results, nil
+func (dl *documentLog) Documents() ([]model.DocumentDescriptor, error) {
+	return dl.store.GetAll()
 }
 
 func (dl *documentLog) Stop() {
-	// TODO: Should check result of Stop()
+	dl.subscriptionsMutex.WriteLock(func() {
+		for _, sub := range dl.subscriptions {
+			close(sub.c)
+		}
+	})
 	dl.advertHashTimer.Stop()
 }
 
 func (dl *documentLog) Start() {
-	dl.cxt, dl.cxtCancel = context.WithCancel(context.Background())
 	dl.advertHashTimer = time.NewTicker(AdvertHashInterval)
 	go dl.advertHash()
 	go dl.resolveAdvertedHashes(dl.protocol.ReceivedConsistencyHashes())
@@ -240,9 +193,8 @@ func (dl *documentLog) Start() {
 
 func (dl *documentLog) resolveAdvertedHashes(queue proto.PeerHashQueue) {
 	for {
-		peerHash, err := queue.Get(dl.cxt)
-		if err != nil {
-			log.Log().Debugf("Get cancelled: %v", err)
+		peerHash := queue.Get()
+		if peerHash == nil {
 			return
 		}
 		log.Log().Debugf("Got consistency hash: %s", peerHash.Hash.String())
