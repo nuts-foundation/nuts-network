@@ -48,8 +48,11 @@ To generate the mocks, run the following commands:
 
 .. code-block:: shell
 
-    ~/go/bin/mockgen -destination=test/mock_client.go -package=test -source=pkg/interface.go
-    ~/go/bin/mockgen -destination=test/mock_protocol.go -package=test -source=pkg/proto/interface.go Protocol
+    ~/go/bin/mockgen -destination=pkg/mock.go -package=pkg -source=pkg/interface.go
+    ~/go/bin/mockgen -destination=pkg/proto/mock.go -package=proto -source=pkg/proto/interface.go Protocol
+    ~/go/bin/mockgen -destination=pkg/documentlog/mock.go -package=documentlog -source=pkg/documentlog/interface.go DocumentLog
+    ~/go/bin/mockgen -destination=pkg/nodelist/mock.go -package=nodelist -source=pkg/nodelist/interface.go NodeList
+    ~/go/bin/mockgen -destination=pkg/p2p/mock.go -package=p2p -source=pkg/p2p/interface.go P2PNetwork
 
 Running in Docker
 *****************

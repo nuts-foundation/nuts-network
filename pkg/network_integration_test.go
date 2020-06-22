@@ -21,6 +21,7 @@ package pkg
 import (
 	"context"
 	"fmt"
+	crypto "github.com/nuts-foundation/nuts-crypto/pkg"
 	core "github.com/nuts-foundation/nuts-go-core"
 	"github.com/nuts-foundation/nuts-network/pkg/documentlog"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
@@ -127,6 +128,15 @@ func addDocumentAndWaitForItToArrive(t *testing.T, sender *Network, receiver *Ne
 
 func startNode(name string) (*Network, error) {
 	bufconListeners[name] = bufconn.Listen(bufSize)
+	cryptoInstance := &crypto.Crypto{
+		Config: crypto.CryptoConfig{
+			Keysize: crypto.MinKeySize,
+			Fspath:  "../../test-files",
+		},
+	}
+	if err := cryptoInstance.Configure(); err != nil {
+		return nil, err
+	}
 	instance = &Network{
 		p2pNetwork: p2p.NewP2PNetworkWithOptions(bufconListeners[name], func(ctx context.Context, target string, opts ...grpc.DialOption) (conn *grpc.ClientConn, err error) {
 			dialer := grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
@@ -135,12 +145,15 @@ func startNode(name string) (*Network, error) {
 			return grpc.DialContext(ctx, target, dialer, grpc.WithBlock(), grpc.WithInsecure())
 		}),
 		protocol: proto.NewProtocol(),
+		crypto:   cryptoInstance,
 		Config: NetworkConfig{
 			GrpcAddr:       name,
 			Mode:           core.ServerEngineMode,
 			PublicAddr:     name,
 			BootstrapNodes: "",
 			NodeID:         name,
+			CertFile:       "../test-files/certificate-and-key.pem",
+			CertKeyFile:    "../test-files/certificate-and-key.pem",
 		},
 	}
 	instance.documentLog = documentlog.NewDocumentLog(instance.protocol)

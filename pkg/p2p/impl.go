@@ -112,15 +112,11 @@ type remoteNode struct {
 	Dialer
 }
 
-func (r *remoteNode) connect(config P2PNetworkConfig) (*peer, error) {
+func (r *remoteNode) connect(nodeId model.NodeID, config *tls.Config) (*peer, error) {
 	log.Log().Infof("Connecting to node: %s", r.NodeInfo)
 	// TODO: Is this the right context?
-	cxt := metadata.NewOutgoingContext(context.Background(), constructMetadata(config.NodeID))
-	tlsCredentials := credentials.NewTLS(&tls.Config{
-		Certificates:       []tls.Certificate{config.ClientCert},
-		InsecureSkipVerify: true, // TODO: Is the actually secure?
-		//RootCAs:      caCertPool, // TODO
-	})
+	cxt := metadata.NewOutgoingContext(context.Background(), constructMetadata(nodeId))
+	tlsCredentials := credentials.NewTLS(config)
 	conn, err := r.Dialer(cxt, r.NodeInfo.Address, grpc.WithBlock(), grpc.WithTransportCredentials(tlsCredentials))
 	if err != nil {
 		return nil, err
@@ -197,6 +193,9 @@ func (n *p2pNetwork) Start(config P2PNetworkConfig) error {
 	if config.ListenAddress == "" {
 		return errors.New("ListenAddress is empty")
 	}
+	if config.TrustStore == nil {
+		return errors.New("TrustStore is nil")
+	}
 	log.Log().Infof("Starting gRPC server (ID: %s) on %s", config.NodeID, config.ListenAddress)
 	n.config = config
 	var err error
@@ -210,8 +209,8 @@ func (n *p2pNetwork) Start(config P2PNetworkConfig) error {
 		// TODO: Verify TLS configuration
 		serverOpts = append(serverOpts, grpc.Creds(credentials.NewTLS(&tls.Config{
 			Certificates: []tls.Certificate{config.ServerCert},
-			ClientAuth:   tls.RequireAnyClientCert, // TODO: Switch to RequireAndVerify
-			// TODO: Add RootCAs/ClientCAs option
+			ClientAuth:   tls.RequireAndVerifyClientCert,
+			ClientCAs:    n.config.TrustStore.Pool(),
 		})))
 	}
 	n.grpcServer = grpc.NewServer(serverOpts...)
@@ -280,7 +279,12 @@ func (n *p2pNetwork) connectToRemoteNodes() {
 			go func() {
 				for {
 					if n.shouldConnectTo(remoteNode.NodeInfo) {
-						if peer, err := remoteNode.connect(n.config); err != nil {
+						tlsConfig := tls.Config{
+							Certificates:       []tls.Certificate{n.config.ClientCert},
+							InsecureSkipVerify: true, // TODO: Is the actually secure?
+							RootCAs:            n.config.TrustStore.Pool(),
+						}
+						if peer, err := remoteNode.connect(n.config.NodeID, &tlsConfig); err != nil {
 							waitPeriod := remoteNode.backoff.Backoff()
 							log.Log().Warnf("Couldn't connect to node, reconnecting in %d seconds (node=%s,err=%v)", int(waitPeriod.Seconds()), remoteNode.NodeInfo, err)
 							time.Sleep(waitPeriod)
