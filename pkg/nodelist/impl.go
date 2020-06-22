@@ -30,7 +30,7 @@ import (
 	"time"
 )
 
-const nodeInfoDocumentType = "node-info"
+const nodeInfoDocumentType = "nuts.node-info"
 
 type nodeList struct {
 	documentLog documentlog.DocumentLog
