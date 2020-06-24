@@ -15,9 +15,9 @@ P2P network serving as a base layer for sharing data between Nuts nodes.
     :target: https://codecov.io/gh/nuts-foundation/nuts-network
     :alt: Code coverage
 
-.. image:: https://api.codacy.com/project/badge/Grade/919adb72a4564722851c7db0ccbec558
-    :target: https://www.codacy.com/app/nuts-foundation/nuts-network
-    :alt: Code style
+.. image:: https://api.codeclimate.com/v1/badges/5475f4d4e696f43285b5/maintainability
+   :target: https://codeclimate.com/github/nuts-foundation/nuts-network/maintainability
+   :alt: Maintainability
 
 The network is written in Go and should be part of nuts-go as an engine.
 
