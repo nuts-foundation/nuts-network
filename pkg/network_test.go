@@ -1,3 +1,21 @@
+/*
+ * Copyright (C) 2020. Nuts community
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ */
+
 package pkg
 
 import (
@@ -30,11 +48,13 @@ func TestNetwork_ListDocuments(t *testing.T) {
 	defer ctrl.Finish()
 	t.Run("ok", func(t *testing.T) {
 		cxt := createNetwork(ctrl)
-		cxt.documentLog.EXPECT().Documents().Return([]model.Document{{
-			Hash:      model.EmptyHash(),
-			Type:      "foo",
-			Timestamp: time.Now(),
-		}})
+		cxt.documentLog.EXPECT().Documents().Return([]model.DocumentDescriptor{{
+			Document: model.Document{
+				Hash:      model.EmptyHash(),
+				Type:      "foo",
+				Timestamp: time.Now(),
+			},
+		}}, nil)
 		docs, err := cxt.network.ListDocuments()
 		assert.Len(t, docs, 1)
 		assert.NoError(t, err)
@@ -66,11 +86,36 @@ func TestNetwork_Diagnostics(t *testing.T) {
 	defer ctrl.Finish()
 	t.Run("ok", func(t *testing.T) {
 		cxt := createNetwork(ctrl)
-		cxt.documentLog.EXPECT().Statistics().Return([]stats.Statistic{stat{},stat{}})
-		cxt.protocol.EXPECT().Statistics().Return([]stats.Statistic{stat{},stat{}})
-		cxt.p2pNetwork.EXPECT().Statistics().Return([]stats.Statistic{stat{},stat{}})
+		cxt.documentLog.EXPECT().Statistics().Return([]stats.Statistic{stat{}, stat{}})
+		cxt.protocol.EXPECT().Statistics().Return([]stats.Statistic{stat{}, stat{}})
+		cxt.p2pNetwork.EXPECT().Statistics().Return([]stats.Statistic{stat{}, stat{}})
 		diagnostics := cxt.network.Diagnostics()
 		assert.Len(t, diagnostics, 6)
+	})
+}
+
+func TestNetwork_Start(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	t.Run("ok - client mode", func(t *testing.T) {
+		cxt := createNetwork(ctrl)
+		err := cxt.network.Start()
+		if !assert.NoError(t, err) {
+			return
+		}
+	})
+	t.Run("ok - server mode", func(t *testing.T) {
+		cxt := createNetwork(ctrl)
+
+		cxt.p2pNetwork.EXPECT().Start()
+		cxt.protocol.EXPECT().Start()
+		cxt.documentLog.EXPECT().Start()
+		cxt.nodeList.EXPECT().Start()
+		cxt.network.Config.Mode = core.ServerEngineMode
+		err := cxt.network.Start()
+		if !assert.NoError(t, err) {
+			return
+		}
 	})
 }
 
@@ -159,7 +204,6 @@ func createNetwork(ctrl *gomock.Controller) *networkTestContext {
 }
 
 type stat struct {
-
 }
 
 func (s stat) Name() string {

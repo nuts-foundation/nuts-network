@@ -28,10 +28,12 @@ import (
 	"github.com/nuts-foundation/nuts-network/pkg/nodelist"
 	"github.com/nuts-foundation/nuts-network/pkg/p2p"
 	"github.com/nuts-foundation/nuts-network/pkg/proto"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
 	"net"
+	"sync"
 	"testing"
 	"time"
 )
@@ -41,6 +43,7 @@ const defaultTimeout = 2 * time.Second
 const documentType = "test"
 
 var bufconListeners = make(map[string]*bufconn.Listener, 0)
+var mutex = sync.Mutex{}
 
 func TestNetwork(t *testing.T) {
 	documentlog.AdvertHashInterval = 500 * time.Millisecond
@@ -97,10 +100,19 @@ func TestNetwork(t *testing.T) {
 	}
 	expectedDocLogSize++
 
-	// Assert documentLog sizes
-	assert.Len(t, bootstrap.documentLog.Documents(), expectedDocLogSize)
-	assert.Len(t, node1.documentLog.Documents(), expectedDocLogSize)
-	assert.Len(t, node2.documentLog.Documents(), expectedDocLogSize)
+	// Now assert that all nodes have received all documents
+	waitForDocuments := func(docLog documentlog.DocumentLog) bool {
+		return waitFor(t, func() (bool, error) {
+			if docs, err := docLog.Documents(); err != nil {
+				return false, err
+			} else {
+				return len(docs) == expectedDocLogSize, nil
+			}
+		}, defaultTimeout)
+	}
+	waitForDocuments(bootstrap.documentLog)
+	waitForDocuments(node1.documentLog)
+	waitForDocuments(node2.documentLog)
 
 	// Can we request the diagnostics?
 	fmt.Printf("%v\n", bootstrap.Diagnostics())
@@ -114,12 +126,7 @@ func addDocumentAndWaitForItToArrive(t *testing.T, sender *Network, receiver *Ne
 	if !assert.NoError(t, err) {
 		return true
 	}
-	var receivedDocument model.Document
-	cxt, _ := context.WithTimeout(context.Background(), defaultTimeout)
-	receivedDocument, err = receiverSub.Get(cxt)
-	if !assert.NoError(t, err) {
-		return false
-	}
+	receivedDocument := receiverSub.Get()
 	addedDocument.Timestamp = addedDocument.Timestamp.UTC()
 	receivedDocument.Timestamp = receivedDocument.Timestamp.UTC()
 	assert.Equal(t, addedDocument, receivedDocument)
@@ -127,13 +134,15 @@ func addDocumentAndWaitForItToArrive(t *testing.T, sender *Network, receiver *Ne
 }
 
 func startNode(name string) (*Network, error) {
+	mutex.Lock()
 	bufconListeners[name] = bufconn.Listen(bufSize)
-	cryptoInstance := &crypto.Crypto{
-		Config: crypto.CryptoConfig{
-			Keysize: crypto.MinKeySize,
-			Fspath:  "../../test-files",
-		},
+	mutex.Unlock()
+	cryptoInstance := crypto.CryptoInstance()
+	cryptoInstance.Config = crypto.CryptoConfig{
+		Keysize: crypto.MinKeySize,
+		Fspath:  "../test-files",
 	}
+	logrus.SetLevel(logrus.DebugLevel)
 	if err := cryptoInstance.Configure(); err != nil {
 		return nil, err
 	}
@@ -142,23 +151,28 @@ func startNode(name string) (*Network, error) {
 			dialer := grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
 				return bufconListeners[target].Dial()
 			})
+			mutex.Lock()
+			defer mutex.Unlock()
 			return grpc.DialContext(ctx, target, dialer, grpc.WithBlock(), grpc.WithInsecure())
 		}),
 		protocol: proto.NewProtocol(),
 		crypto:   cryptoInstance,
 		Config: NetworkConfig{
-			GrpcAddr:       name,
-			Mode:           core.ServerEngineMode,
-			PublicAddr:     name,
-			BootstrapNodes: "",
-			NodeID:         name,
-			CertFile:       "../test-files/certificate-and-key.pem",
-			CertKeyFile:    "../test-files/certificate-and-key.pem",
+			GrpcAddr:                name,
+			Mode:                    core.ServerEngineMode,
+			StorageConnectionString: "file:" + name + "?mode=memory&cache=shared&busy_timeout=500",
+			PublicAddr:              name,
+			BootstrapNodes:          "",
+			NodeID:                  name,
+			CertFile:                "../test-files/certificate-and-key.pem",
+			CertKeyFile:             "../test-files/certificate-and-key.pem",
 		},
 	}
 	instance.documentLog = documentlog.NewDocumentLog(instance.protocol)
 	instance.nodeList = nodelist.NewNodeList(instance.documentLog, instance.p2pNetwork)
-
+	if err := instance.Configure(); err != nil {
+		return nil, err
+	}
 	if err := instance.Start(); err != nil {
 		return nil, err
 	}

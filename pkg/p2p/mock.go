@@ -49,18 +49,32 @@ func (mr *MockP2PNetworkMockRecorder) Statistics() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Statistics", reflect.TypeOf((*MockP2PNetwork)(nil).Statistics))
 }
 
-// Start mocks base method
-func (m *MockP2PNetwork) Start(config P2PNetworkConfig) error {
+// Configure mocks base method
+func (m *MockP2PNetwork) Configure(config P2PNetworkConfig) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Start", config)
+	ret := m.ctrl.Call(m, "Configure", config)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Configure indicates an expected call of Configure
+func (mr *MockP2PNetworkMockRecorder) Configure(config interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Configure", reflect.TypeOf((*MockP2PNetwork)(nil).Configure), config)
+}
+
+// Start mocks base method
+func (m *MockP2PNetwork) Start() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Start")
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // Start indicates an expected call of Start
-func (mr *MockP2PNetworkMockRecorder) Start(config interface{}) *gomock.Call {
+func (mr *MockP2PNetworkMockRecorder) Start() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockP2PNetwork)(nil).Start), config)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Start", reflect.TypeOf((*MockP2PNetwork)(nil).Start))
 }
 
 // Stop mocks base method

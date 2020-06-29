@@ -19,19 +19,25 @@
 package documentlog
 
 import (
-	"context"
-	"github.com/nuts-foundation/nuts-network/pkg/concurrency"
+	"github.com/nuts-foundation/nuts-network/pkg/documentlog/store"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/pkg/proto"
 	"github.com/nuts-foundation/nuts-network/pkg/stats"
 )
 
+// DocumentLog defines the API for the DocumentLog layer, used to store/retrieve chained documents.
 type DocumentLog interface {
 	proto.HashSource
 	stats.StatsProvider
-	// Starts the document log
+	// Configure configures this DocumentLog. Must be called before Start().
+	Configure(store store.DocumentStore)
+	// Starts the document log.
 	Start()
+	// Stops the document log.
 	Stop()
+	// Subscribe creates a subscription for incoming documents with the specified type. It can be read from using the
+	// returned DocumentQueue. There can be multiple subscribers for the same document type. The returned queue MUST
+	// read from since it has an internal buffer which blocks the producer (the DocumentLog) when full.
 	Subscribe(documentType string) DocumentQueue // TODO: Subscribe is a bad name when returning a blocking queue
 }
 
@@ -39,22 +45,16 @@ type DocumentLog interface {
 type DocumentQueue interface {
 	// Get gets a document from the queue. It blocks until:
 	// - There's a document to return
-	// - The context is cancelled or expires
 	// - The queue is closed by the producer
 	// When the queue is closed this function an error and no document.
-	Get(context context.Context) (model.Document, error)
+	Get() *model.Document
 }
 
 type documentQueue struct {
-	internal     concurrency.Queue
+	c            chan *model.Document
 	documentType string
 }
 
-func (q documentQueue) Get(cxt context.Context) (model.Document, error) {
-	item, err := q.internal.Get(cxt)
-	if err != nil {
-		return model.Document{}, err
-	} else {
-		return item.(model.Document), nil
-	}
+func (q documentQueue) Get() *model.Document {
+	return <-q.c
 }

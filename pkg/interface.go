@@ -26,9 +26,12 @@ import (
 
 // NetworkClient is the interface to be implemented by any remote or local client
 type NetworkClient interface {
-
+	// GetDocumentContents retrieves the document contents for the given hash. If the document of contents are not known, an error is returned.
 	GetDocumentContents(hash model.Hash) (io.ReadCloser, error)
-	GetDocument(hash model.Hash) (*model.Document, error)
-	AddDocumentWithContents(timestamp time.Time, docType string, contents []byte) (model.Document, error)
-	ListDocuments() ([]model.Document, error)
+	// GetDocument retrieves the document for the given hash. If the document is not known, an error is returned.
+	GetDocument(hash model.Hash) (*model.DocumentDescriptor, error)
+	// AddDocumentWithContents adds a document with the specified contents. If it already exists (hashes match) an error is returned.
+	AddDocumentWithContents(timestamp time.Time, docType string, contents []byte) (*model.Document, error)
+	// ListDocuments returns all documents known to this network instance.
+	ListDocuments() ([]model.DocumentDescriptor, error)
 }

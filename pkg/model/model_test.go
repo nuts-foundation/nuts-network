@@ -42,3 +42,16 @@ func TestDocument_Clone(t *testing.T) {
 		assert.NotSame(t, expected.Hash, actual.Hash)
 	})
 }
+
+func TestMakeConsistencyHash(t *testing.T) {
+	t.Run("ok - h1 empty", func(t *testing.T) {
+		expected, _ := ParseHash("383c9da631bd120169e82b0679e4c2e8d5050894")
+		actual := MakeConsistencyHash(EmptyHash(), expected)
+		assert.Equal(t, expected.String(), actual.String())
+	})
+	t.Run("ok - both empty", func(t *testing.T) {
+		expected := EmptyHash()
+		actual := MakeConsistencyHash(EmptyHash(), expected)
+		assert.Equal(t, expected.String(), actual.String())
+	})
+}

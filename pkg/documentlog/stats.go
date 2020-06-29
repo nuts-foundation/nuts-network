@@ -20,11 +20,14 @@ package documentlog
 
 import (
 	"fmt"
+	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"strings"
 )
 
+// LastConsistencyHashStatistic holds the last consistency hash stored on the DocumentLog.
 type LastConsistencyHashStatistic struct {
-	Hash string
+	// Hash is the last consistency hash.
+	Hash model.Hash
 }
 
 func (d LastConsistencyHashStatistic) Name() string {
@@ -32,10 +35,12 @@ func (d LastConsistencyHashStatistic) Name() string {
 }
 
 func (d LastConsistencyHashStatistic) String() string {
-	return d.Hash
+	return d.Hash.String()
 }
 
+// ConsistencyHashListStatistic holds an ordered list of all consistency hashes on the Document Log.
 type ConsistencyHashListStatistic struct {
+	// Hashes contains all consistency hashes
 	Hashes []string
 }
 
@@ -51,6 +56,7 @@ func (d ConsistencyHashListStatistic) String() string {
 	return strings.Join(result, " ")
 }
 
+// NumberOfDocumentsStatistic holds the number of documents stored on the DocumentLog.
 type NumberOfDocumentsStatistic struct {
 	NumberOfDocuments int
 }
@@ -63,6 +69,7 @@ func (d NumberOfDocumentsStatistic) String() string {
 	return fmt.Sprintf("%d", d.NumberOfDocuments)
 }
 
+// LogSizeStatistic holds the storage size of all stored document contents (in bytes).
 type LogSizeStatistic struct {
 	sizeInBytes int
 }

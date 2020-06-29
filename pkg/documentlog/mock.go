@@ -5,8 +5,8 @@
 package documentlog
 
 import (
-	context "context"
 	gomock "github.com/golang/mock/gomock"
+	store "github.com/nuts-foundation/nuts-network/pkg/documentlog/store"
 	model "github.com/nuts-foundation/nuts-network/pkg/model"
 	stats "github.com/nuts-foundation/nuts-network/pkg/stats"
 	io "io"
@@ -38,11 +38,12 @@ func (m *MockDocumentLog) EXPECT() *MockDocumentLogMockRecorder {
 }
 
 // Documents mocks base method
-func (m *MockDocumentLog) Documents() []model.Document {
+func (m *MockDocumentLog) Documents() ([]model.DocumentDescriptor, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Documents")
-	ret0, _ := ret[0].([]model.Document)
-	return ret0
+	ret0, _ := ret[0].([]model.DocumentDescriptor)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Documents indicates an expected call of Documents
@@ -51,26 +52,27 @@ func (mr *MockDocumentLogMockRecorder) Documents() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Documents", reflect.TypeOf((*MockDocumentLog)(nil).Documents))
 }
 
-// HasDocument mocks base method
-func (m *MockDocumentLog) HasDocument(hash model.Hash) bool {
+// AddDocument mocks base method
+func (m *MockDocumentLog) AddDocument(arg0 model.Document) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HasDocument", hash)
-	ret0, _ := ret[0].(bool)
+	ret := m.ctrl.Call(m, "AddDocument", arg0)
+	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// HasDocument indicates an expected call of HasDocument
-func (mr *MockDocumentLogMockRecorder) HasDocument(hash interface{}) *gomock.Call {
+// AddDocument indicates an expected call of AddDocument
+func (mr *MockDocumentLogMockRecorder) AddDocument(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasDocument", reflect.TypeOf((*MockDocumentLog)(nil).HasDocument), hash)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddDocument", reflect.TypeOf((*MockDocumentLog)(nil).AddDocument), arg0)
 }
 
 // HasContentsForDocument mocks base method
-func (m *MockDocumentLog) HasContentsForDocument(hash model.Hash) bool {
+func (m *MockDocumentLog) HasContentsForDocument(hash model.Hash) (bool, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HasContentsForDocument", hash)
 	ret0, _ := ret[0].(bool)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // HasContentsForDocument indicates an expected call of HasContentsForDocument
@@ -80,11 +82,12 @@ func (mr *MockDocumentLogMockRecorder) HasContentsForDocument(hash interface{}) 
 }
 
 // GetDocument mocks base method
-func (m *MockDocumentLog) GetDocument(hash model.Hash) *model.Document {
+func (m *MockDocumentLog) GetDocument(hash model.Hash) (*model.DocumentDescriptor, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetDocument", hash)
-	ret0, _ := ret[0].(*model.Document)
-	return ret0
+	ret0, _ := ret[0].(*model.DocumentDescriptor)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetDocument indicates an expected call of GetDocument
@@ -108,23 +111,11 @@ func (mr *MockDocumentLogMockRecorder) GetDocumentContents(hash interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDocumentContents", reflect.TypeOf((*MockDocumentLog)(nil).GetDocumentContents), hash)
 }
 
-// AddDocument mocks base method
-func (m *MockDocumentLog) AddDocument(document model.Document) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "AddDocument", document)
-}
-
-// AddDocument indicates an expected call of AddDocument
-func (mr *MockDocumentLogMockRecorder) AddDocument(document interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddDocument", reflect.TypeOf((*MockDocumentLog)(nil).AddDocument), document)
-}
-
 // AddDocumentWithContents mocks base method
-func (m *MockDocumentLog) AddDocumentWithContents(timestamp time.Time, documentType string, contents io.Reader) (model.Document, error) {
+func (m *MockDocumentLog) AddDocumentWithContents(timestamp time.Time, documentType string, contents io.Reader) (*model.Document, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddDocumentWithContents", timestamp, documentType, contents)
-	ret0, _ := ret[0].(model.Document)
+	ret0, _ := ret[0].(*model.Document)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -136,10 +127,10 @@ func (mr *MockDocumentLogMockRecorder) AddDocumentWithContents(timestamp, docume
 }
 
 // AddDocumentContents mocks base method
-func (m *MockDocumentLog) AddDocumentContents(hash model.Hash, contents io.Reader) (model.Document, error) {
+func (m *MockDocumentLog) AddDocumentContents(hash model.Hash, contents io.Reader) (*model.Document, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddDocumentContents", hash, contents)
-	ret0, _ := ret[0].(model.Document)
+	ret0, _ := ret[0].(*model.Document)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -162,6 +153,18 @@ func (m *MockDocumentLog) Statistics() []stats.Statistic {
 func (mr *MockDocumentLogMockRecorder) Statistics() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Statistics", reflect.TypeOf((*MockDocumentLog)(nil).Statistics))
+}
+
+// Configure mocks base method
+func (m *MockDocumentLog) Configure(store store.DocumentStore) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Configure", store)
+}
+
+// Configure indicates an expected call of Configure
+func (mr *MockDocumentLogMockRecorder) Configure(store interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Configure", reflect.TypeOf((*MockDocumentLog)(nil).Configure), store)
 }
 
 // Start mocks base method
@@ -226,16 +229,15 @@ func (m *MockDocumentQueue) EXPECT() *MockDocumentQueueMockRecorder {
 }
 
 // Get mocks base method
-func (m *MockDocumentQueue) Get(context context.Context) (model.Document, error) {
+func (m *MockDocumentQueue) Get() *model.Document {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", context)
-	ret0, _ := ret[0].(model.Document)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret := m.ctrl.Call(m, "Get")
+	ret0, _ := ret[0].(*model.Document)
+	return ret0
 }
 
 // Get indicates an expected call of Get
-func (mr *MockDocumentQueueMockRecorder) Get(context interface{}) *gomock.Call {
+func (mr *MockDocumentQueueMockRecorder) Get() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockDocumentQueue)(nil).Get), context)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockDocumentQueue)(nil).Get))
 }

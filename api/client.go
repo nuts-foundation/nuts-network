@@ -52,7 +52,7 @@ func (hb HttpClient) GetDocumentContents(hash model.Hash) (io.ReadCloser, error)
 	return res.Body, nil
 }
 
-func (hb HttpClient) ListDocuments() ([]model.Document, error) {
+func (hb HttpClient) ListDocuments() ([]model.DocumentDescriptor, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), hb.Timeout)
 	defer cancel()
 	res, err := hb.client().ListDocuments(ctx)
@@ -66,18 +66,18 @@ func (hb HttpClient) ListDocuments() ([]model.Document, error) {
 	if err != nil {
 		return nil, err
 	}
-	documents := make([]Document, 0)
+	documents := make([]model.Document, 0)
 	if err := json.Unmarshal(responseData, &documents); err != nil {
 		return nil, err
 	}
-	result := make([]model.Document, len(documents))
+	result := make([]model.DocumentDescriptor, len(documents))
 	for i, current := range documents {
-		result[i] = current.toModel()
+		result[i] = model.DocumentDescriptor{Document: current}
 	}
 	return result, nil
 }
 
-func (hb HttpClient) GetDocument(hash model.Hash) (*model.Document, error) {
+func (hb HttpClient) GetDocument(hash model.Hash) (*model.DocumentDescriptor, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), hb.Timeout)
 	defer cancel()
 	res, err := hb.client().GetDocument(ctx, hash.String())
@@ -87,7 +87,7 @@ func (hb HttpClient) GetDocument(hash model.Hash) (*model.Document, error) {
 	return testAndParseDocumentResponse(res)
 }
 
-func (hb HttpClient) AddDocumentWithContents(timestamp time.Time, docType string, contents []byte) (model.Document, error) {
+func (hb HttpClient) AddDocumentWithContents(timestamp time.Time, docType string, contents []byte) (*model.Document, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), hb.Timeout)
 	defer cancel()
 	res, err := hb.client().AddDocument(ctx, AddDocumentJSONRequestBody{
@@ -96,13 +96,13 @@ func (hb HttpClient) AddDocumentWithContents(timestamp time.Time, docType string
 		Type:      docType,
 	})
 	if err != nil {
-		return model.Document{}, err
+		return nil, err
 	}
-	documentPtr, err := testAndParseDocumentResponse(res)
-	if err != nil || documentPtr == nil {
-		return model.Document{}, err
+	document, err := testAndParseDocumentResponse(res)
+	if err != nil || document == nil {
+		return nil, err
 	}
-	return *documentPtr, err
+	return &document.Document, err
 }
 
 func (hb HttpClient) client() ClientInterface {
@@ -118,7 +118,7 @@ func (hb HttpClient) client() ClientInterface {
 	return response
 }
 
-func testAndParseDocumentResponse(response *http.Response) (*model.Document, error) {
+func testAndParseDocumentResponse(response *http.Response) (*model.DocumentDescriptor, error) {
 	if response.StatusCode == http.StatusNotFound {
 		return nil, nil
 	}
@@ -133,7 +133,7 @@ func testAndParseDocumentResponse(response *http.Response) (*model.Document, err
 	if err := json.Unmarshal(responseData, &result); err != nil {
 		return nil, err
 	}
-	doc := result.toModel()
+	doc := model.DocumentDescriptor{Document: result.toModel()}
 	return &doc, nil
 }
 

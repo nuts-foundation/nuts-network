@@ -26,6 +26,7 @@ import (
 	core "github.com/nuts-foundation/nuts-go-core"
 	log "github.com/nuts-foundation/nuts-network/logging"
 	"github.com/nuts-foundation/nuts-network/pkg/documentlog"
+	"github.com/nuts-foundation/nuts-network/pkg/documentlog/store"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/pkg/nodelist"
 	"github.com/nuts-foundation/nuts-network/pkg/p2p"
@@ -44,9 +45,10 @@ const ModuleName = "Network"
 // NetworkConfig holds the config
 type NetworkConfig struct {
 	// Socket address for gRPC to listen on
-	GrpcAddr string
-	Mode     string
-	Address  string
+	GrpcAddr                string
+	Mode                    string
+	StorageConnectionString string
+	Address                 string
 	// Public address of this nodes other nodes can use to connect to this node.
 	PublicAddr     string
 	BootstrapNodes string
@@ -87,6 +89,7 @@ func NetworkInstance() *Network {
 			p2pNetwork: p2p.NewP2PNetwork(),
 			protocol:   proto.NewProtocol(),
 		}
+		instance.crypto = crypto.CryptoInstance()
 		instance.documentLog = documentlog.NewDocumentLog(instance.protocol)
 		instance.nodeList = nodelist.NewNodeList(instance.documentLog, instance.p2pNetwork)
 	})
@@ -104,9 +107,20 @@ func (n *Network) Configure() error {
 			n.Config.Address = cfg.ServerAddress()
 		}
 		if n.Config.Mode == core.ServerEngineMode {
+			n.protocol.Configure(n.p2pNetwork, n.documentLog)
+			var documentStore store.DocumentStore
+			if documentStore, err = store.CreateDocumentStore(n.Config.StorageConnectionString); err != nil {
+				return
+			}
+			n.documentLog.Configure(documentStore)
 			n.crypto = crypto.NewCryptoClient()
-			for _, nodeInfo := range n.Config.ParseBootstrapNodes() {
-				n.p2pNetwork.AddRemoteNode(model.ParseNodeInfo(nodeInfo))
+			var networkConfig *p2p.P2PNetworkConfig
+			if networkConfig, err = n.buildP2PConfig(); err != nil {
+				return
+			}
+			n.nodeList.Configure(networkConfig.NodeID, networkConfig.PublicAddress)
+			if err = n.p2pNetwork.Configure(*networkConfig); err != nil {
+				return
 			}
 		}
 	})
@@ -118,32 +132,28 @@ func (n *Network) Start() error {
 	if n.Config.Mode != core.ServerEngineMode {
 		return nil
 	}
-	networkConfig, err := n.buildP2PConfig()
-	if err != nil {
+	if err := n.p2pNetwork.Start(); err != nil {
 		return err
 	}
-	if err := n.p2pNetwork.Start(*networkConfig); err != nil {
-		return err
-	}
-	n.protocol.Start(n.p2pNetwork, n.documentLog)
+	n.protocol.Start()
 	n.documentLog.Start()
-	n.nodeList.Start(networkConfig.NodeID, networkConfig.PublicAddress)
+	n.nodeList.Start()
 	return nil
 }
 
-func (n *Network) GetDocument(hash model.Hash) (*model.Document, error) {
-	return n.documentLog.GetDocument(hash), nil
+func (n *Network) GetDocument(hash model.Hash) (*model.DocumentDescriptor, error) {
+	return n.documentLog.GetDocument(hash)
 }
 
 func (n *Network) GetDocumentContents(hash model.Hash) (io.ReadCloser, error) {
 	return n.documentLog.GetDocumentContents(hash)
 }
 
-func (n *Network) ListDocuments() ([]model.Document, error) {
-	return n.documentLog.Documents(), nil
+func (n *Network) ListDocuments() ([]model.DocumentDescriptor, error) {
+	return n.documentLog.Documents()
 }
 
-func (n *Network) AddDocumentWithContents(timestamp time.Time, docType string, contents []byte) (model.Document, error) {
+func (n *Network) AddDocumentWithContents(timestamp time.Time, docType string, contents []byte) (*model.Document, error) {
 	log.Log().Infof("Adding document (timestamp=%d,type=%s,content length=%d)", timestamp.UnixNano(), docType, len(contents))
 	// TODO: Validation
 	return n.documentLog.AddDocumentWithContents(timestamp, docType, bytes.NewReader(contents))
@@ -174,10 +184,11 @@ func (n *Network) Diagnostics() []core.DiagnosticResult {
 
 func (n *Network) buildP2PConfig() (*p2p.P2PNetworkConfig, error) {
 	cfg := p2p.P2PNetworkConfig{
-		ListenAddress: n.Config.GrpcAddr,
-		PublicAddress: n.Config.PublicAddr,
-		NodeID:        model.NodeID(n.Config.NodeID),
-		TrustStore:    n.crypto.TrustStore(),
+		ListenAddress:  n.Config.GrpcAddr,
+		PublicAddress:  n.Config.PublicAddr,
+		BootstrapNodes: n.Config.ParseBootstrapNodes(),
+		NodeID:         model.NodeID(n.Config.NodeID),
+		TrustStore:     n.crypto.TrustStore(),
 	}
 	identity := core.NutsConfig().Identity()
 	if cfg.NodeID == "" {

@@ -16,13 +16,27 @@
  *
  */
 
-package stats
+package test
 
-type Statistic interface {
-	Name() string
-	String() string
+import (
+	"fmt"
+	"github.com/golang/mock/gomock"
+)
+
+func IsOfType(t string) gomock.Matcher {
+	return &typeMatcher{typeName: t}
 }
 
-type StatsProvider interface {
-	Statistics() []Statistic
+type typeMatcher struct {
+	typeName     string
+	resolvedType string
+}
+
+func (b *typeMatcher) Matches(x interface{}) bool {
+	b.resolvedType = fmt.Sprintf("%T", x)
+	return b.resolvedType == b.typeName
+}
+
+func (b typeMatcher) String() string {
+	return "type is " + b.typeName + " (actual: " + b.resolvedType + ")"
 }
