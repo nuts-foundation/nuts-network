@@ -57,14 +57,14 @@ func NewNetworkEngine() *core.Engine {
 
 func flagSet() *pflag.FlagSet {
 	flagSet := pflag.NewFlagSet("network", pflag.ContinueOnError)
-	flagSet.String("grpcAddr", ":5555", "gRPC address to listen on")
-	flagSet.String("publicAddr", "", "Public address other nodes can connect to. If empty, the node will not be registered on the nodelist.")
-	flagSet.String("bootstrapNodes", "", "Space-separated list of bootstrap node addresses")
-	flagSet.String("nodeID", "", "ID of this node. If not set, the node's identity will be used.")
+	flagSet.String("grpcAddr", ":5555", "Local address for gRPC to listen on.")
+	flagSet.String("publicAddr", "", "Public address (of this node) other nodes can use to connect to it. If set, it is registered on the nodelist.")
+	flagSet.String("bootstrapNodes", "", "Space-separated list of bootstrap nodes (`<host>:<port>`) which the node initially connect to.")
+	flagSet.String("nodeID", "", "Instance ID of this node under which the public address is registered on the nodelist. If not set, the Nuts node's identity will be used.")
 	flagSet.String("mode", "", "server or client, when client it uses the HttpClient")
 	flagSet.String("address", "", "Interface and port for http server to bind to, defaults to global Nuts address.")
-	flagSet.String("certFile", "", "File containing the certificate the node uses to authenticate itself with.")
-	flagSet.String("certKeyFile", "", "File containing the private key corresponding with the certificate the node uses to authenticate itself with.")
+	flagSet.String("certFile", "", "PEM file containing the certificate this node will identify itself with to other nodes. If not set, the Nuts node will attempt to load a TLS certificate from the crypto module.")
+	flagSet.String("certKeyFile", "", "PEM file containing the key belonging to this node's certificate. If not set, the Nuts node will attempt to load a TLS certificate from the crypto module.")
 	return flagSet
 }
 

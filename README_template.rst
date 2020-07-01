@@ -25,5 +25,9 @@ P2P network serving as a base layer for sharing data between Nuts nodes.
 Configuration
 *************
 
-.. include:: docs/pages/configuration/network.rst
-    :start-after: .. marker-for-readme
+Parameters
+==========
+
+The following configuration parameters are available:
+
+.. include:: README_options.rst
