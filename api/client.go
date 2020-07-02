@@ -66,13 +66,13 @@ func (hb HttpClient) ListDocuments() ([]model.DocumentDescriptor, error) {
 	if err != nil {
 		return nil, err
 	}
-	documents := make([]model.Document, 0)
+	documents := make([]Document, 0)
 	if err := json.Unmarshal(responseData, &documents); err != nil {
 		return nil, err
 	}
 	result := make([]model.DocumentDescriptor, len(documents))
 	for i, current := range documents {
-		result[i] = model.DocumentDescriptor{Document: current}
+		result[i] = model.DocumentDescriptor{Document: current.toModel()}
 	}
 	return result, nil
 }

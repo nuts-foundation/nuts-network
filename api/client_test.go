@@ -19,12 +19,25 @@
 package api
 
 import (
+	"encoding/json"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/test"
 	"github.com/stretchr/testify/assert"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 )
+
+type handler struct {
+	statusCode   int
+	responseData []byte
+}
+
+func (h handler) ServeHTTP(writer http.ResponseWriter, req *http.Request) {
+	writer.WriteHeader(h.statusCode)
+	writer.Write(h.responseData)
+}
 
 func TestDocument_fromModel(t *testing.T) {
 	expected := model.Document{
@@ -51,4 +64,35 @@ func TestDocument_toModel(t *testing.T) {
 		Type:      "test",
 	}
 	assert.Equal(t, expected, actual.toModel())
+}
+
+func TestHttpClient_ListDocuments(t *testing.T) {
+	t.Run("200", func(t *testing.T) {
+		doc1 := Document{
+			Hash:      "31a3d460bb3c7d98845187c716a30db81c44b615",
+			Timestamp: 1000,
+			Type:      "doc",
+		}
+		doc2 := Document{
+			Hash:      "bdeab373c65ef320514763bc94eaa827bee14915",
+			Timestamp: 2000,
+			Type:      "doc",
+		}
+		data, _ := json.Marshal([]Document{doc1, doc2})
+		s := httptest.NewServer(handler{statusCode: http.StatusOK, responseData: data})
+		httpClient := HttpClient{ServerAddress: s.URL, Timeout: time.Second}
+		documents, err := httpClient.ListDocuments()
+		if !assert.NoError(t, err) {
+			return
+		}
+		if !assert.Len(t, documents, 2) {
+			return
+		}
+		assert.Equal(t, doc1.Hash, documents[0].Hash.String())
+		assert.Equal(t, doc1.Timestamp, documents[0].Timestamp.UnixNano())
+		assert.Equal(t, doc1.Type, documents[0].Type)
+		assert.Equal(t, doc2.Hash, documents[1].Hash.String())
+		assert.Equal(t, doc2.Timestamp, documents[1].Timestamp.UnixNano())
+		assert.Equal(t, doc2.Type, documents[1].Type)
+	})
 }
