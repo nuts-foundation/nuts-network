@@ -24,3 +24,5 @@ nuts-network
 # MacOS
 .DS_Store
 
+# Test files
+truststore.pem

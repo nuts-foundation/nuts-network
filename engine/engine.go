@@ -19,6 +19,8 @@
 package engine
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -27,6 +29,7 @@ import (
 	"github.com/nuts-foundation/nuts-network/client"
 	logging "github.com/nuts-foundation/nuts-network/logging"
 	"github.com/nuts-foundation/nuts-network/pkg"
+	"github.com/nuts-foundation/nuts-network/pkg/documentlog"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -68,7 +71,7 @@ func flagSet() *pflag.FlagSet {
 	return flagSet
 }
 
-func Cmd() *cobra.Command {
+func cmdWithClient(clientCreator func() pkg.NetworkClient) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "network",
 		Short: "network commands",
@@ -112,8 +115,7 @@ func Cmd() *cobra.Command {
 		Use:   "list",
 		Short: "Lists the documents on the network",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			instance := client.NewNetworkClient()
-			documents, err := instance.ListDocuments()
+			documents, err := clientCreator().ListDocuments()
 			if err != nil {
 				return err
 			}
@@ -135,7 +137,7 @@ func Cmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			instance := client.NewNetworkClient()
+			instance := clientCreator()
 			document, err := instance.GetDocument(hash)
 			if err != nil {
 				return err
@@ -145,6 +147,20 @@ func Cmd() *cobra.Command {
 				return nil
 			}
 			logging.Log().Infof("Document %s:\n  Type: %s\n  Timestamp: %s", document.Hash, document.Type, document.Timestamp)
+			contents, err := instance.GetDocumentContents(hash)
+			if err != nil {
+				if errors.Is(err, documentlog.ErrMissingDocumentContents) {
+					logging.Log().Info("No contents for the given document on the local node.")
+					err = nil
+				}
+				return err
+			}
+			buf := new(bytes.Buffer)
+			if _, err = buf.ReadFrom(contents); err != nil {
+				return err
+			}
+			println()
+			println(string(buf.Bytes()))
 			return nil
 		},
 	})
@@ -158,8 +174,7 @@ func Cmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			instance := client.NewNetworkClient()
-			reader, err := instance.GetDocumentContents(hash)
+			reader, err := clientCreator().GetDocumentContents(hash)
 			if err != nil {
 				return err
 			}
@@ -179,4 +194,10 @@ func Cmd() *cobra.Command {
 		},
 	})
 	return cmd
+}
+
+func Cmd() *cobra.Command {
+	return cmdWithClient(func() pkg.NetworkClient {
+		return client.NewNetworkClient()
+	})
 }
