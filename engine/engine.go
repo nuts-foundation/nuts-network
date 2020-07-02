@@ -65,6 +65,7 @@ func flagSet() *pflag.FlagSet {
 	flagSet.String("address", "", "Interface and port for http server to bind to, defaults to global Nuts address.")
 	flagSet.String("certFile", "", "PEM file containing the certificate this node will identify itself with to other nodes. If not set, the Nuts node will attempt to load a TLS certificate from the crypto module.")
 	flagSet.String("certKeyFile", "", "PEM file containing the key belonging to this node's certificate. If not set, the Nuts node will attempt to load a TLS certificate from the crypto module.")
+	flagSet.String("storageConnectionString", "file:network.db", "SQLite3 connection string to the database where the network should persist its documents.")
 	return flagSet
 }
 
