@@ -58,6 +58,12 @@ func NewNetworkEngine() *core.Engine {
 	}
 }
 
+func Cmd() *cobra.Command {
+	return cmdWithClient(func() pkg.NetworkClient {
+		return client.NewNetworkClient()
+	})
+}
+
 func flagSet() *pflag.FlagSet {
 	flagSet := pflag.NewFlagSet("network", pflag.ContinueOnError)
 	flagSet.String("grpcAddr", ":5555", "Local address for gRPC to listen on.")
@@ -76,59 +82,47 @@ func cmdWithClient(clientCreator func() pkg.NetworkClient) *cobra.Command {
 		Use:   "network",
 		Short: "network commands",
 	}
+	cmd.AddCommand(versionCommand())
+	cmd.AddCommand(serverCommand())
+	cmd.AddCommand(listCommand(clientCreator))
+	cmd.AddCommand(getCommand(clientCreator))
+	cmd.AddCommand(contentsCommand(clientCreator))
+	return cmd
+}
 
-	cmd.AddCommand(&cobra.Command{
-		Use:   "version",
-		Short: "Print the version number of the Nuts network",
-		Run: func(cmd *cobra.Command, args []string) {
-			logging.Log().Info("version 0.0.0")
-		},
-	})
-
-	cmd.AddCommand(&cobra.Command{
-		Use:   "server",
-		Short: "Run standalone api server",
-		Run: func(cmd *cobra.Command, args []string) {
-			echoInstance := echo.New()
-			echoInstance.HideBanner = true
-			echoInstance.Use(middleware.Logger())
-			core.NewStatusEngine().Routes(echoInstance)
-			api.RegisterHandlers(echoInstance, &api.ApiWrapper{Service: pkg.NetworkInstance()})
-
-			// todo move to nuts-go-core
-			sigc := make(chan os.Signal, 1)
-			signal.Notify(sigc, os.Interrupt, os.Kill)
-
-			recoverFromEcho := func() {
-				defer func() {
-					recover()
-				}()
-				echoInstance.Start(core.NutsConfig().ServerAddress())
-			}
-
-			go recoverFromEcho()
-			<-sigc
-		},
-	})
-
-	cmd.AddCommand(&cobra.Command{
-		Use:   "list",
-		Short: "Lists the documents on the network",
+func contentsCommand(clientCreator func() pkg.NetworkClient) *cobra.Command {
+	return &cobra.Command{
+		Use:   "contents [hash]",
+		Short: "Retrieves the contents of a document from the network",
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			documents, err := clientCreator().ListDocuments()
+			hash, err := model.ParseHash(args[0])
 			if err != nil {
 				return err
 			}
-			const format = "%-40s %-40s %-20s\n"
-			fmt.Printf(format, "Hash", "Timestamp", "Type")
-			for _, document := range documents {
-				fmt.Printf(format, document.Hash, document.Timestamp, document.Type)
+			reader, err := clientCreator().GetDocumentContents(hash)
+			if err != nil {
+				return err
 			}
+			if reader == nil {
+				logging.Log().Warnf("Document or contents not found: %s", hash)
+				return nil
+			}
+			defer reader.Close()
+			buf := new(strings.Builder)
+			_, err = io.Copy(buf, reader)
+			if err != nil {
+				logging.Log().Warnf("Unable to read contents: %v", err)
+				return nil
+			}
+			println(buf.String())
 			return nil
 		},
-	})
+	}
+}
 
-	cmd.AddCommand(&cobra.Command{
+func getCommand(clientCreator func() pkg.NetworkClient) *cobra.Command {
+	return &cobra.Command{
 		Use:   "get [hash]",
 		Short: "Gets a document from the network",
 		Args:  cobra.ExactArgs(1),
@@ -163,41 +157,62 @@ func cmdWithClient(clientCreator func() pkg.NetworkClient) *cobra.Command {
 			println(string(buf.Bytes()))
 			return nil
 		},
-	})
-
-	cmd.AddCommand(&cobra.Command{
-		Use:   "contents [hash]",
-		Short: "Retrieves the contents of a document from the network",
-		Args:  cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			hash, err := model.ParseHash(args[0])
-			if err != nil {
-				return err
-			}
-			reader, err := clientCreator().GetDocumentContents(hash)
-			if err != nil {
-				return err
-			}
-			if reader == nil {
-				logging.Log().Warnf("Document or contents not found: %s", hash)
-				return nil
-			}
-			defer reader.Close()
-			buf := new(strings.Builder)
-			_, err = io.Copy(buf, reader)
-			if err != nil {
-				logging.Log().Warnf("Unable to read contents: %v", err)
-				return nil
-			}
-			println(buf.String())
-			return nil
-		},
-	})
-	return cmd
+	}
 }
 
-func Cmd() *cobra.Command {
-	return cmdWithClient(func() pkg.NetworkClient {
-		return client.NewNetworkClient()
-	})
+func listCommand(clientCreator func() pkg.NetworkClient) *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "Lists the documents on the network",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			documents, err := clientCreator().ListDocuments()
+			if err != nil {
+				return err
+			}
+			const format = "%-40s %-40s %-20s\n"
+			fmt.Printf(format, "Hash", "Timestamp", "Type")
+			for _, document := range documents {
+				fmt.Printf(format, document.Hash, document.Timestamp, document.Type)
+			}
+			return nil
+		},
+	}
+}
+
+func serverCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "server",
+		Short: "Run standalone api server",
+		Run: func(cmd *cobra.Command, args []string) {
+			echoInstance := echo.New()
+			echoInstance.HideBanner = true
+			echoInstance.Use(middleware.Logger())
+			core.NewStatusEngine().Routes(echoInstance)
+			api.RegisterHandlers(echoInstance, &api.ApiWrapper{Service: pkg.NetworkInstance()})
+
+			// todo move to nuts-go-core
+			sigc := make(chan os.Signal, 1)
+			signal.Notify(sigc, os.Interrupt, os.Kill)
+
+			recoverFromEcho := func() {
+				defer func() {
+					recover()
+				}()
+				echoInstance.Start(core.NutsConfig().ServerAddress())
+			}
+
+			go recoverFromEcho()
+			<-sigc
+		},
+	}
+}
+
+func versionCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "Print the version number of the Nuts network",
+		Run: func(cmd *cobra.Command, args []string) {
+			logging.Log().Info("version 0.0.0")
+		},
+	}
 }
