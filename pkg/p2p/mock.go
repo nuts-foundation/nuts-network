@@ -63,6 +63,20 @@ func (mr *MockP2PNetworkMockRecorder) Configure(config interface{}) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Configure", reflect.TypeOf((*MockP2PNetwork)(nil).Configure), config)
 }
 
+// Configured mocks base method
+func (m *MockP2PNetwork) Configured() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Configured")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Configured indicates an expected call of Configured
+func (mr *MockP2PNetworkMockRecorder) Configured() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Configured", reflect.TypeOf((*MockP2PNetwork)(nil).Configured))
+}
+
 // Start mocks base method
 func (m *MockP2PNetwork) Start() error {
 	m.ctrl.T.Helper()
@@ -92,9 +106,11 @@ func (mr *MockP2PNetworkMockRecorder) Stop() *gomock.Call {
 }
 
 // AddRemoteNode mocks base method
-func (m *MockP2PNetwork) AddRemoteNode(node model.NodeInfo) {
+func (m *MockP2PNetwork) AddRemoteNode(node model.NodeInfo) bool {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "AddRemoteNode", node)
+	ret := m.ctrl.Call(m, "AddRemoteNode", node)
+	ret0, _ := ret[0].(bool)
+	return ret0
 }
 
 // AddRemoteNode indicates an expected call of AddRemoteNode
