@@ -198,6 +198,9 @@ func (n *p2pNetwork) Configure(config P2PNetworkConfig) error {
 		return errors.New("TrustStore is nil")
 	}
 	n.config = config
+	for _, bootstrapNode := range n.config.BootstrapNodes {
+		n.AddRemoteNode(model.NodeInfo{Address: bootstrapNode})
+	}
 	return nil
 }
 
