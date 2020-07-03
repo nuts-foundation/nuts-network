@@ -66,7 +66,7 @@ func CreateDocumentStore(connectionString string) (DocumentStore, error) {
 }
 
 func newSQLDocumentStore(db *gorm.DB) (DocumentStore, error) {
-	docStore := &sqlDocumentStore{db: db, writeMutex: &sync.Mutex{}}
+	docStore := &sqlDocumentStore{db: db, sqliteMutex: &sync.Mutex{}}
 	if err := docStore.migrate(); err != nil {
 		return nil, err
 	}
@@ -74,8 +74,9 @@ func newSQLDocumentStore(db *gorm.DB) (DocumentStore, error) {
 }
 
 type sqlDocumentStore struct {
-	db         *gorm.DB
-	writeMutex *sync.Mutex
+	db          *gorm.DB
+	// sqliteMutex is ONLY required for sqlite, so when switching to another database system this should probably be removed!
+	sqliteMutex *sync.Mutex
 }
 
 type sqlDocument struct {
@@ -102,9 +103,8 @@ func (d sqlDocument) descriptor() model.DocumentDescriptor {
 }
 
 func (s sqlDocumentStore) Add(document model.Document) (model.Hash, error) {
-	// This mutex is ONLY required for sqlite, so when switching to another database system this should probably be removed!
-	s.writeMutex.Lock()
-	defer s.writeMutex.Unlock()
+	s.sqliteMutex.Lock()
+	defer s.sqliteMutex.Unlock()
 	consistencyHash := model.EmptyHash()
 	err := s.db.Transaction(func(tx *gorm.DB) error {
 		// Insert
@@ -186,14 +186,20 @@ func (s sqlDocumentStore) get(query interface{}, args ...interface{}) (*model.Do
 }
 
 func (s sqlDocumentStore) Get(hash model.Hash) (*model.DocumentDescriptor, error) {
+	s.sqliteMutex.Lock()
+	defer s.sqliteMutex.Unlock()
 	return s.get("hash = ?", hash.String())
 }
 
 func (s sqlDocumentStore) GetByConsistencyHash(hash model.Hash) (*model.DocumentDescriptor, error) {
+	s.sqliteMutex.Lock()
+	defer s.sqliteMutex.Unlock()
 	return s.get("consistency_hash = ?", hash.String())
 }
 
 func (s sqlDocumentStore) GetAll() ([]model.DocumentDescriptor, error) {
+	s.sqliteMutex.Lock()
+	defer s.sqliteMutex.Unlock()
 	documents := make([]sqlDocument, 0)
 	err := s.db.Table(documentTable).Select(documentSelectCols).Order("timestamp, hash ASC").Find(&documents).Error
 	if err != nil {
@@ -213,6 +219,8 @@ func (s sqlDocumentStore) WriteContents(hash model.Hash, contents io.Reader) err
 	if _, err := buf.ReadFrom(contents); err != nil {
 		return err
 	}
+	s.sqliteMutex.Lock()
+	defer s.sqliteMutex.Unlock()
 	query := s.db.Table(documentTable).Where("hash = ?", hash.String()).UpdateColumn("contents", buf.Bytes())
 	if query.Error != nil {
 		return query.Error
@@ -224,6 +232,8 @@ func (s sqlDocumentStore) WriteContents(hash model.Hash, contents io.Reader) err
 }
 
 func (s sqlDocumentStore) ReadContents(hash model.Hash) (io.ReadCloser, error) {
+	s.sqliteMutex.Lock()
+	defer s.sqliteMutex.Unlock()
 	document := sqlDocument{}
 	err := s.db.
 		Table(documentTable).
@@ -240,6 +250,8 @@ func (s sqlDocumentStore) ReadContents(hash model.Hash) (io.ReadCloser, error) {
 }
 
 func (s sqlDocumentStore) LastConsistencyHash() model.Hash {
+	s.sqliteMutex.Lock()
+	defer s.sqliteMutex.Unlock()
 	values := make([]interface{}, 0)
 	query := s.db.
 		Table(documentTable).
@@ -290,6 +302,8 @@ func (s sqlDocumentStore) findPredecessors(tx *gorm.DB, before model.Document) (
 }
 
 func (s sqlDocumentStore) ContentsSize() int {
+	s.sqliteMutex.Lock()
+	defer s.sqliteMutex.Unlock()
 	values := make([]interface{}, 1)
 	query := s.db.Table("stats").Where("key = 'contents-size'").Pluck("CAST(value AS INTEGER)", &values)
 	if query.Error != nil {
@@ -304,6 +318,8 @@ func (s sqlDocumentStore) ContentsSize() int {
 }
 
 func (s sqlDocumentStore) Size() int {
+	s.sqliteMutex.Lock()
+	defer s.sqliteMutex.Unlock()
 	size := 0
 	if err := s.db.Table(documentTable).Count(&size).Error; err != nil {
 		logging.Log().Errorf("Unable to determine size: %v", err)
