@@ -19,6 +19,8 @@
 package pkg
 
 import (
+	"crypto/rsa"
+	"crypto/x509"
 	"errors"
 	"github.com/golang/mock/gomock"
 	cryptoMock "github.com/nuts-foundation/nuts-crypto/test/mock"
@@ -94,6 +96,36 @@ func TestNetwork_Diagnostics(t *testing.T) {
 	})
 }
 
+func TestNetwork_Configure(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	t.Run("ok", func(t *testing.T) {
+		cxt := createNetwork(ctrl)
+		cxt.protocol.EXPECT().Configure(gomock.Any(), gomock.Any())
+		cxt.documentLog.EXPECT().Configure(gomock.Any())
+		cxt.nodeList.EXPECT().Configure(gomock.Any(), gomock.Any())
+		cxt.p2pNetwork.EXPECT().Configure(gomock.Any())
+		cxt.crypto.EXPECT().TrustStore()
+		cxt.crypto.EXPECT().GetTLSCertificate(gomock.Any()).Return(&x509.Certificate{}, &rsa.PrivateKey{}, nil)
+		err := cxt.network.Configure()
+		if !assert.NoError(t, err) {
+			return
+		}
+	})
+	t.Run("ok - no TLS certificate, network offline", func(t *testing.T) {
+		cxt := createNetwork(ctrl)
+		cxt.protocol.EXPECT().Configure(gomock.Any(), gomock.Any())
+		cxt.documentLog.EXPECT().Configure(gomock.Any())
+		cxt.nodeList.EXPECT().Configure(gomock.Any(), gomock.Any())
+		cxt.crypto.EXPECT().TrustStore()
+		cxt.crypto.EXPECT().GetTLSCertificate(gomock.Any()).Return(nil, nil, errors.New("failed"))
+		err := cxt.network.Configure()
+		if !assert.NoError(t, err) {
+			return
+		}
+	})
+}
+
 func TestNetwork_Start(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -106,8 +138,20 @@ func TestNetwork_Start(t *testing.T) {
 	})
 	t.Run("ok - server mode", func(t *testing.T) {
 		cxt := createNetwork(ctrl)
-
 		cxt.p2pNetwork.EXPECT().Start()
+		cxt.p2pNetwork.EXPECT().Configured().Return(true)
+		cxt.protocol.EXPECT().Start()
+		cxt.documentLog.EXPECT().Start()
+		cxt.nodeList.EXPECT().Start()
+		cxt.network.Config.Mode = core.ServerEngineMode
+		err := cxt.network.Start()
+		if !assert.NoError(t, err) {
+			return
+		}
+	})
+	t.Run("ok - server mode - network offline", func(t *testing.T) {
+		cxt := createNetwork(ctrl)
+		cxt.p2pNetwork.EXPECT().Configured().Return(false)
 		cxt.protocol.EXPECT().Start()
 		cxt.documentLog.EXPECT().Start()
 		cxt.nodeList.EXPECT().Start()

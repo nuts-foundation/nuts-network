@@ -40,6 +40,8 @@ import (
 
 type Dialer func(ctx context.Context, target string, opts ...grpc.DialOption) (conn *grpc.ClientConn, err error)
 
+const addRemoteNodeChannelSize = 100
+
 type p2pNetwork struct {
 	config P2PNetworkConfig
 
@@ -58,6 +60,11 @@ type p2pNetwork struct {
 	peerMutex        concurrency.SaferRWMutex
 	receivedMessages messageQueue
 	peerDialer       Dialer
+	configured       bool
+}
+
+func (n p2pNetwork) Configured() bool {
+	return n.configured
 }
 
 func (n p2pNetwork) Statistics() []stats.Statistic {
@@ -117,10 +124,10 @@ func (r *remoteNode) connect(nodeId model.NodeID, config *tls.Config) (*peer, er
 	log.Log().Infof("Connecting to node: %s", r.NodeInfo)
 	// TODO: Is this the right context?
 	cxt := metadata.NewOutgoingContext(context.Background(), constructMetadata(nodeId))
-	tlsCredentials := credentials.NewTLS(config)
-	conn, err := r.Dialer(cxt, r.NodeInfo.Address, grpc.WithBlock(), grpc.WithTransportCredentials(tlsCredentials))
+	dialContext, _ := context.WithTimeout(cxt, 5*time.Second)
+	conn, err := r.Dialer(dialContext, r.NodeInfo.Address, grpc.WithBlock(), grpc.WithTransportCredentials(credentials.NewTLS(config)))
 	if err != nil {
-		return nil, err
+		return nil, errors2.Wrap(err, "unable to connect")
 	}
 	// TODO: What if two node propagate the same ID? Maybe we shouldn't index our peers based on NodeID?
 	client := network.NewNetworkClient(conn)
@@ -165,7 +172,7 @@ func NewP2PNetwork() P2PNetwork {
 		peers:                make(map[model.PeerID]*peer, 0),
 		peersByAddr:          make(map[string]*peer, 0),
 		remoteNodes:          make(map[model.NodeID]*remoteNode, 0),
-		remoteNodeAddChannel: make(chan model.NodeInfo, 100), // TODO: Does this number make sense?
+		remoteNodeAddChannel: make(chan model.NodeInfo, addRemoteNodeChannelSize), // TODO: Does this number make sense?
 		peerMutex:            concurrency.NewSaferRWMutex("p2p-peers"),
 		receivedMessages:     messageQueue{c: make(chan PeerMessage, 100)}, // TODO: Does this number make sense?
 		peerDialer:           grpc.DialContext,
@@ -198,6 +205,7 @@ func (n *p2pNetwork) Configure(config P2PNetworkConfig) error {
 		return errors.New("TrustStore is nil")
 	}
 	n.config = config
+	n.configured = true
 	for _, bootstrapNode := range n.config.BootstrapNodes {
 		n.AddRemoteNode(model.NodeInfo{Address: bootstrapNode})
 	}
@@ -256,10 +264,12 @@ func (n *p2pNetwork) Stop() error {
 	return nil
 }
 
-func (n p2pNetwork) AddRemoteNode(nodeInfo model.NodeInfo) {
-	if n.shouldConnectTo(nodeInfo) {
+func (n p2pNetwork) AddRemoteNode(nodeInfo model.NodeInfo) bool {
+	if n.shouldConnectTo(nodeInfo) && len(n.remoteNodeAddChannel) < addRemoteNodeChannelSize {
 		n.remoteNodeAddChannel <- nodeInfo
+		return true
 	}
+	return false
 }
 
 func (n *p2pNetwork) sendAndReceiveForPeer(peer *peer) {

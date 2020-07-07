@@ -32,12 +32,15 @@ type P2PNetwork interface {
 	stats.StatsProvider
 	// Configure configures the P2PNetwork. Must be called before Start().
 	Configure(config P2PNetworkConfig) error
+	// Configured returns whether the system is configured or not
+	Configured() bool
 	// Start starts the P2P network on the local node.
 	Start() error
 	// Stop stops the P2P network on the local node.
 	Stop() error
 	// AddRemoteNode adds a remote node to the local node's view of the network, so it can become one of our peers.
-	AddRemoteNode(node model.NodeInfo)
+	// If we'll try to connect to the remote node, true is returned, otherwise false.
+	AddRemoteNode(node model.NodeInfo) bool
 	// ReceivedMessages returns a queue containing all messages received from our peers. It must be drained, because when its buffer is full the producer (P2PNetwork) is blocked.
 	ReceivedMessages() MessageQueue
 	// Send sends a message to a specific peer.

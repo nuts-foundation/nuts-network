@@ -89,7 +89,7 @@ func NetworkInstance() *Network {
 			p2pNetwork: p2p.NewP2PNetwork(),
 			protocol:   proto.NewProtocol(),
 		}
-		instance.crypto = crypto.CryptoInstance()
+		instance.crypto = crypto.NewCryptoClient()
 		instance.documentLog = documentlog.NewDocumentLog(instance.protocol)
 		instance.nodeList = nodelist.NewNodeList(instance.documentLog, instance.p2pNetwork)
 	})
@@ -113,14 +113,14 @@ func (n *Network) Configure() error {
 				return
 			}
 			n.documentLog.Configure(documentStore)
-			n.crypto = crypto.NewCryptoClient()
-			var networkConfig *p2p.P2PNetworkConfig
-			if networkConfig, err = n.buildP2PConfig(); err != nil {
+			n.nodeList.Configure(model.NodeID(n.Config.NodeID), n.Config.PublicAddr)
+			if networkConfig, p2pErr := n.buildP2PConfig(); p2pErr != nil {
+				log.Log().Warnf("Unable to build P2P layer config, network will be offline (reason: %v)", p2pErr)
 				return
-			}
-			n.nodeList.Configure(networkConfig.NodeID, networkConfig.PublicAddress)
-			if err = n.p2pNetwork.Configure(*networkConfig); err != nil {
-				return
+			} else {
+				if err = n.p2pNetwork.Configure(*networkConfig); err != nil {
+					return
+				}
 			}
 		}
 	})
@@ -132,8 +132,15 @@ func (n *Network) Start() error {
 	if n.Config.Mode != core.ServerEngineMode {
 		return nil
 	}
-	if err := n.p2pNetwork.Start(); err != nil {
-		return err
+	if n.p2pNetwork.Configured() {
+		// It's possible that the Nuts node isn't bootstrapped (e.g. Node CA certificate missing) but that shouldn't
+		// prevent it from starting. In that case the network will be in 'offline mode', meaning it can be read from
+		// and written to, but it will not try to connect to other peers.
+		if err := n.p2pNetwork.Start(); err != nil {
+			return err
+		}
+	} else {
+		log.Log().Warn("Network is in offline mode (P2P layer not configured).")
 	}
 	n.protocol.Start()
 	n.documentLog.Start()
