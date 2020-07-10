@@ -21,6 +21,7 @@ package pkg
 import (
 	"bytes"
 	"crypto/tls"
+	"github.com/nuts-foundation/nuts-crypto/client"
 	crypto "github.com/nuts-foundation/nuts-crypto/pkg"
 	"github.com/nuts-foundation/nuts-crypto/pkg/types"
 	core "github.com/nuts-foundation/nuts-go-core"
@@ -89,7 +90,7 @@ func NetworkInstance() *Network {
 			p2pNetwork: p2p.NewP2PNetwork(),
 			protocol:   proto.NewProtocol(),
 		}
-		instance.crypto = crypto.NewCryptoClient()
+		instance.crypto = client.NewCryptoClient()
 		instance.documentLog = documentlog.NewDocumentLog(instance.protocol)
 		instance.nodeList = nodelist.NewNodeList(instance.documentLog, instance.p2pNetwork)
 	})
