@@ -192,6 +192,11 @@ func TestNetwork_Shutdown(t *testing.T) {
 	})
 }
 
+func TestDefaultNetworkConfig(t *testing.T) {
+	defs := DefaultNetworkConfig()
+	assert.Equal(t, ":5555", defs.GrpcAddr)
+}
+
 func TestNetwork_buildP2PNetworkConfig(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
