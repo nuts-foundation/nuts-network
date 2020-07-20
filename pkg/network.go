@@ -58,6 +58,14 @@ type NetworkConfig struct {
 	CertKeyFile    string
 }
 
+// DefaultNetworkConfig returns the default network configuration.
+func DefaultNetworkConfig() NetworkConfig {
+	return NetworkConfig{
+		GrpcAddr:                ":5555",
+		StorageConnectionString: "file:network.db",
+	}
+}
+
 func (c NetworkConfig) ParseBootstrapNodes() []string {
 	var result []string
 	for _, addr := range strings.Split(c.BootstrapNodes, " ") {
@@ -87,6 +95,7 @@ var oneRegistry sync.Once
 func NetworkInstance() *Network {
 	oneRegistry.Do(func() {
 		instance = &Network{
+			Config:     DefaultNetworkConfig(),
 			p2pNetwork: p2p.NewP2PNetwork(),
 			protocol:   proto.NewProtocol(),
 		}

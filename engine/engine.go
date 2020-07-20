@@ -56,16 +56,17 @@ func NewNetworkEngine() *core.Engine {
 }
 
 func flagSet() *pflag.FlagSet {
+	defs := pkg.DefaultNetworkConfig()
 	flagSet := pflag.NewFlagSet("network", pflag.ContinueOnError)
-	flagSet.String("grpcAddr", ":5555", "Local address for gRPC to listen on.")
-	flagSet.String("publicAddr", "", "Public address (of this node) other nodes can use to connect to it. If set, it is registered on the nodelist.")
-	flagSet.String("bootstrapNodes", "", "Space-separated list of bootstrap nodes (`<host>:<port>`) which the node initially connect to.")
-	flagSet.String("nodeID", "", "Instance ID of this node under which the public address is registered on the nodelist. If not set, the Nuts node's identity will be used.")
-	flagSet.String("mode", "", "server or client, when client it uses the HttpClient")
-	flagSet.String("address", "", "Interface and port for http server to bind to, defaults to global Nuts address.")
-	flagSet.String("certFile", "", "PEM file containing the certificate this node will identify itself with to other nodes. If not set, the Nuts node will attempt to load a TLS certificate from the crypto module.")
-	flagSet.String("certKeyFile", "", "PEM file containing the key belonging to this node's certificate. If not set, the Nuts node will attempt to load a TLS certificate from the crypto module.")
-	flagSet.String("storageConnectionString", "file:network.db", "SQLite3 connection string to the database where the network should persist its documents.")
+	flagSet.String("grpcAddr", defs.GrpcAddr, "Local address for gRPC to listen on.")
+	flagSet.String("publicAddr", defs.PublicAddr, "Public address (of this node) other nodes can use to connect to it. If set, it is registered on the nodelist.")
+	flagSet.String("bootstrapNodes", defs.BootstrapNodes, "Space-separated list of bootstrap nodes (`<host>:<port>`) which the node initially connect to.")
+	flagSet.String("nodeID", defs.NodeID, "Instance ID of this node under which the public address is registered on the nodelist. If not set, the Nuts node's identity will be used.")
+	flagSet.String("mode", defs.Mode, "server or client, when client it uses the HttpClient")
+	flagSet.String("address", defs.Address, "Interface and port for http server to bind to, defaults to global Nuts address.")
+	flagSet.String("certFile", defs.CertFile, "PEM file containing the certificate this node will identify itself with to other nodes. If not set, the Nuts node will attempt to load a TLS certificate from the crypto module.")
+	flagSet.String("certKeyFile", defs.CertKeyFile, "PEM file containing the key belonging to this node's certificate. If not set, the Nuts node will attempt to load a TLS certificate from the crypto module.")
+	flagSet.String("storageConnectionString", defs.StorageConnectionString, "SQLite3 connection string to the database where the network should persist its documents.")
 	return flagSet
 }
 
