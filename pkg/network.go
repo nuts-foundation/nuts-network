@@ -99,7 +99,6 @@ func NetworkInstance() *Network {
 			p2pNetwork: p2p.NewP2PNetwork(),
 			protocol:   proto.NewProtocol(),
 		}
-		instance.crypto = client.NewCryptoClient()
 		instance.documentLog = documentlog.NewDocumentLog(instance.protocol)
 		instance.nodeList = nodelist.NewNodeList(instance.documentLog, instance.p2pNetwork)
 	})
@@ -112,6 +111,9 @@ func (n *Network) Configure() error {
 	var err error
 	n.configOnce.Do(func() {
 		cfg := core.NutsConfig()
+		if n.crypto == nil {
+			n.crypto = client.NewCryptoClient()
+		}
 		n.Config.Mode = cfg.GetEngineMode(n.Config.Mode)
 		if n.Config.Address == "" {
 			n.Config.Address = cfg.ServerAddress()
