@@ -197,7 +197,6 @@ func (dl *documentLog) resolveAdvertedHashes(queue proto.PeerHashQueue) {
 		if peerHash == nil {
 			return
 		}
-		log.Log().Debugf("Got consistency hash: %s", peerHash.Hash.String())
 		document, err := dl.store.GetByConsistencyHash(peerHash.Hash)
 		if err != nil {
 			log.Log().Errorf("Error while checking document (consistency hash=%s) existence: %v", peerHash.Hash, err)
@@ -210,7 +209,7 @@ func (dl *documentLog) resolveAdvertedHashes(queue proto.PeerHashQueue) {
 				log.Log().Errorf("Could query peer for hash list (peer=%s): %v", peerHash.Peer, err)
 			}
 		} else {
-			log.Log().Debugf("Received known consistency hash, no action is required")
+			log.Log().Tracef("Received known consistency hash, no action is required")
 		}
 	}
 }
@@ -219,7 +218,7 @@ func (dl *documentLog) advertHash() {
 	for {
 		<-dl.advertHashTimer.C
 		hash := dl.store.LastConsistencyHash()
-		log.Log().Debugf("Adverting last hash (%s)", hash)
+		log.Log().Tracef("Adverting last hash (%s)", hash)
 		dl.protocol.AdvertConsistencyHash(hash)
 		dl.lastConsistencyHash.Store(hash)
 	}
