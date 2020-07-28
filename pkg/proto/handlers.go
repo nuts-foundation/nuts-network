@@ -9,7 +9,7 @@ import (
 )
 
 func (p *protocol) handleAdvertHash(peer model.PeerID, advertHash *network.AdvertHash) {
-	log.Log().Debugf("Received adverted hash from peer: %s", peer)
+	log.Log().Tracef("Received adverted hash from peer: %s", peer)
 	peerHash := PeerHash{
 		Peer: peer,
 		Hash: advertHash.Hash,
@@ -29,7 +29,7 @@ func (p *protocol) handleDocumentContents(peer model.PeerID, contents *network.D
 
 func (p *protocol) handleDocumentContentsQuery(peer model.PeerID, query *network.DocumentContentsQuery) error {
 	hash := model.Hash(query.Hash)
-	log.Log().Debugf("Received document contents query from peer (peer=%s, hash=%s)", peer, hash)
+	log.Log().Tracef("Received document contents query from peer (peer=%s, hash=%s)", peer, hash)
 	// TODO: Maybe this should be asynchronous since loading document contents might be I/O heavy?
 	if contentsExist, err := p.hashSource.HasContentsForDocument(hash); err != nil {
 		return err
@@ -56,7 +56,7 @@ func (p *protocol) handleDocumentContentsQuery(peer model.PeerID, query *network
 }
 
 func (p *protocol) handleHashList(peer model.PeerID, hashList *network.HashList) error {
-	log.Log().Debugf("Received hash list from peer (peer=%s)", peer)
+	log.Log().Tracef("Received hash list from peer (peer=%s)", peer)
 	var documents = make([]model.Document, len(hashList.Hashes))
 	for i, current := range hashList.Hashes {
 		hash := model.Hash(current.Hash)
@@ -101,7 +101,7 @@ func (p *protocol) checkDocumentOnLocalNode(peer model.PeerID, peerDocument mode
 }
 
 func (p *protocol) handleHashListQuery(peer model.PeerID) error {
-	log.Log().Debugf("Received hash list query from peer, responding with consistency hash list (peer=%s)", peer)
+	log.Log().Tracef("Received hash list query from peer, responding with consistency hash list (peer=%s)", peer)
 	msg := createMessage()
 	documents, err := p.hashSource.Documents()
 	if err != nil {
