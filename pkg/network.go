@@ -216,9 +216,15 @@ func (n *Network) buildP2PConfig() (*p2p.P2PNetworkConfig, error) {
 	}
 	if n.Config.CertFile == "" && n.Config.CertKeyFile == "" {
 		log.Log().Info("No certificate and/or key file specified, will load TLS certificate from crypto module.")
-		tlsCertificate, privateKey, err := n.crypto.GetTLSCertificate(types.KeyForEntity(types.LegalEntity{URI: identity}))
+		entity := types.LegalEntity{URI: identity}
+		tlsCertificate, privateKey, err := n.crypto.GetTLSCertificate(entity)
 		if err != nil {
 			return nil, errors2.Wrap(err, "unable to load node TLS certificate and/or key from crypto module")
+		}
+		if tlsCertificate == nil || privateKey == nil {
+			if tlsCertificate, privateKey, err = n.crypto.RenewTLSCertificate(entity); err != nil {
+				return nil, errors2.Wrap(err, "unable to renew node TLS certificate")
+			}
 		}
 		cfg.ServerCert = tls.Certificate{
 			Certificate: [][]byte{tlsCertificate.Raw},

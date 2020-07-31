@@ -112,6 +112,31 @@ func TestNetwork_Configure(t *testing.T) {
 			return
 		}
 	})
+	t.Run("ok - renew tls cert", func(t *testing.T) {
+		cxt := createNetwork(ctrl)
+		cxt.protocol.EXPECT().Configure(gomock.Any(), gomock.Any())
+		cxt.documentLog.EXPECT().Configure(gomock.Any())
+		cxt.nodeList.EXPECT().Configure(gomock.Any(), gomock.Any())
+		cxt.p2pNetwork.EXPECT().Configure(gomock.Any())
+		cxt.crypto.EXPECT().TrustStore()
+		cxt.crypto.EXPECT().GetTLSCertificate(gomock.Any()).Return(nil, nil, nil)
+		cxt.crypto.EXPECT().RenewTLSCertificate(gomock.Any()).Return(&x509.Certificate{}, &rsa.PrivateKey{}, nil)
+		err := cxt.network.Configure()
+		if !assert.NoError(t, err) {
+			return
+		}
+	})
+	t.Run("error - unable to renew tls cert", func(t *testing.T) {
+		cxt := createNetwork(ctrl)
+		cxt.protocol.EXPECT().Configure(gomock.Any(), gomock.Any())
+		cxt.documentLog.EXPECT().Configure(gomock.Any())
+		cxt.nodeList.EXPECT().Configure(gomock.Any(), gomock.Any())
+		cxt.crypto.EXPECT().TrustStore()
+		cxt.crypto.EXPECT().GetTLSCertificate(gomock.Any()).Return(nil, nil, nil)
+		cxt.crypto.EXPECT().RenewTLSCertificate(gomock.Any()).Return(nil, nil, errors.New("failed"))
+		err := cxt.network.Configure()
+		assert.NoError(t, err)
+	})
 	t.Run("ok - no TLS certificate, network offline", func(t *testing.T) {
 		cxt := createNetwork(ctrl)
 		cxt.protocol.EXPECT().Configure(gomock.Any(), gomock.Any())
@@ -120,9 +145,7 @@ func TestNetwork_Configure(t *testing.T) {
 		cxt.crypto.EXPECT().TrustStore()
 		cxt.crypto.EXPECT().GetTLSCertificate(gomock.Any()).Return(nil, nil, errors.New("failed"))
 		err := cxt.network.Configure()
-		if !assert.NoError(t, err) {
-			return
-		}
+		assert.NoError(t, err)
 	})
 }
 

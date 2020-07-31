@@ -3,7 +3,7 @@ module github.com/nuts-foundation/nuts-network
 go 1.13
 
 require (
-	github.com/deepmap/oapi-codegen v1.3.9
+	github.com/deepmap/oapi-codegen v1.3.11
 	github.com/golang-migrate/migrate/v4 v4.11.0
 	github.com/golang/mock v1.4.3
 	github.com/golang/protobuf v1.4.2
@@ -11,7 +11,7 @@ require (
 	github.com/labstack/echo v3.3.10+incompatible // indirect
 	github.com/labstack/echo/v4 v4.1.16
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible
-	github.com/nuts-foundation/nuts-crypto v0.13.2-0.20200710131507-8f3cf7e71409
+	github.com/nuts-foundation/nuts-crypto v0.13.2-0.20200727112845-9a496507fa95
 	github.com/nuts-foundation/nuts-go-core v0.14.1-0.20200624131634-75b5f59c0b8e
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.6.0
