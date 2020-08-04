@@ -145,6 +145,8 @@ github.com/golang/mock v1.3.1/go.mod h1:sBzyDLLjw3U8JLTeZvSv8jJB+tU5PVekmnlKIyFU
 github.com/golang/mock v1.4.0/go.mod h1:UOMv5ysSaYNkG+OFQykRIcU/QvvxJf3p21QfJ2Bt3cw=
 github.com/golang/mock v1.4.3 h1:GV+pQPG/EUUbkh47niozDcADz6go/dUwhVzdUQHIVRw=
 github.com/golang/mock v1.4.3/go.mod h1:UOMv5ysSaYNkG+OFQykRIcU/QvvxJf3p21QfJ2Bt3cw=
+github.com/golang/mock v1.4.4 h1:l75CXGRSwbaYNpl/Z2X1XIIAMSCquvXgpVZDhwEIJsc=
+github.com/golang/mock v1.4.4/go.mod h1:l3mdAwkq5BuhzHwde/uurv3sEJeZMXNpwsxVWU71h+4=
 github.com/golang/protobuf v1.2.0/go.mod h1:6lQm79b+lXiMfvg/cZm0SGofjICqVBUtrP5yJMmIC1U=
 github.com/golang/protobuf v1.3.1/go.mod h1:6lQm79b+lXiMfvg/cZm0SGofjICqVBUtrP5yJMmIC1U=
 github.com/golang/protobuf v1.3.2/go.mod h1:6lQm79b+lXiMfvg/cZm0SGofjICqVBUtrP5yJMmIC1U=
@@ -346,6 +348,8 @@ github.com/nuts-foundation/nuts-crypto v0.13.2-0.20200710131507-8f3cf7e71409 h1:
 github.com/nuts-foundation/nuts-crypto v0.13.2-0.20200710131507-8f3cf7e71409/go.mod h1:KSWwwrekQjuHMFk/HyckOyMSN134odVHESyDIV2PVig=
 github.com/nuts-foundation/nuts-crypto v0.13.2-0.20200727112845-9a496507fa95 h1:a69+DVu0f+LYpTnr0v0amOIOk16Fh0H28/jh4S6J93k=
 github.com/nuts-foundation/nuts-crypto v0.13.2-0.20200727112845-9a496507fa95/go.mod h1:Mqfv0hXK3IS2SoOGFQ28vKQt+Ec7o9wONGXXt+uv/Xk=
+github.com/nuts-foundation/nuts-crypto v0.13.2-0.20200803140504-b933fa351767 h1:JfNBz+PZkFkRgJbi8/CErktTn/deR/GO/a4HUSQJzT8=
+github.com/nuts-foundation/nuts-crypto v0.13.2-0.20200803140504-b933fa351767/go.mod h1:0YBfTlcHXGt0B3W/yAU4qPh5xa+LRN3PpXbf6g7TvOE=
 github.com/nuts-foundation/nuts-crypto v0.13.2 h1:BoQ8qCILtEuC+firfYOIiZocLU5WO7RK5gyYTsZVSF0=
 github.com/nuts-foundation/nuts-crypto v0.13.2/go.mod h1:2JTdNvxWBbqv/VWQw3PazNNjY4FlbDf6LAyv2u2vtGo=
 github.com/nuts-foundation/nuts-crypto v0.14.0 h1:gXgZR0QwyBBdutmTercXiFx3foRuLxfmNickm98JX5U=
