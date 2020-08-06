@@ -94,16 +94,22 @@ var oneRegistry sync.Once
 // NetworkInstance returns the singleton Network
 func NetworkInstance() *Network {
 	oneRegistry.Do(func() {
-		instance = &Network{
-			Config:     DefaultNetworkConfig(),
-			p2pNetwork: p2p.NewP2PNetwork(),
-			protocol:   proto.NewProtocol(),
-		}
-		instance.documentLog = documentlog.NewDocumentLog(instance.protocol)
-		instance.nodeList = nodelist.NewNodeList(instance.documentLog, instance.p2pNetwork)
+		instance = NewNetworkInstance(DefaultNetworkConfig(), client.NewCryptoClient())
 	})
 
 	return instance
+}
+
+func NewNetworkInstance(config NetworkConfig, cryptoClient crypto.Client) *Network {
+	result := &Network{
+		Config:     config,
+		crypto:     cryptoClient,
+		p2pNetwork: p2p.NewP2PNetwork(),
+		protocol:   proto.NewProtocol(),
+	}
+	result.documentLog = documentlog.NewDocumentLog(result.protocol)
+	result.nodeList = nodelist.NewNodeList(result.documentLog, result.p2pNetwork)
+	return result
 }
 
 // Configure configures the network subsystem
@@ -111,9 +117,6 @@ func (n *Network) Configure() error {
 	var err error
 	n.configOnce.Do(func() {
 		cfg := core.NutsConfig()
-		if n.crypto == nil {
-			n.crypto = client.NewCryptoClient()
-		}
 		n.Config.Mode = cfg.GetEngineMode(n.Config.Mode)
 		if n.Config.Address == "" {
 			n.Config.Address = cfg.ServerAddress()

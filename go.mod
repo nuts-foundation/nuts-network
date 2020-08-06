@@ -11,7 +11,7 @@ require (
 	github.com/labstack/echo v3.3.10+incompatible // indirect
 	github.com/labstack/echo/v4 v4.1.16
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible
-	github.com/nuts-foundation/nuts-crypto v0.13.2-0.20200803140504-b933fa351767
+	github.com/nuts-foundation/nuts-crypto v0.13.2-0.20200806064724-32ed0e791e6a
 	github.com/nuts-foundation/nuts-go-core v0.14.1-0.20200624131634-75b5f59c0b8e
 	github.com/pkg/errors v0.9.1
 	github.com/sirupsen/logrus v1.6.0
