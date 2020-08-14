@@ -22,7 +22,6 @@ import (
 	core "github.com/nuts-foundation/nuts-go-core"
 	"github.com/nuts-foundation/nuts-network/api"
 	"github.com/nuts-foundation/nuts-network/pkg"
-	"github.com/sirupsen/logrus"
 	"time"
 )
 
@@ -31,10 +30,6 @@ func NewNetworkClient() pkg.NetworkClient {
 	instance := pkg.NetworkInstance()
 
 	if core.NutsConfig().GetEngineMode(instance.Config.Mode) == core.ServerEngineMode {
-		if err := instance.Configure(); err != nil {
-			logrus.Panic(err)
-		}
-
 		return instance
 	} else {
 		return api.HttpClient{
