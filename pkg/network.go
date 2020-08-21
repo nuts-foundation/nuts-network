@@ -128,7 +128,15 @@ func (n *Network) Configure() error {
 				return
 			}
 			n.documentLog.Configure(documentStore)
-			n.nodeList.Configure(model.NodeID(n.Config.NodeID), n.Config.PublicAddr)
+			identity := core.NutsConfig().VendorID()
+			if n.Config.NodeID == "" {
+				log.Log().Warnf("NodeID not configured, will use node identity: %s", identity)
+				n.Config.NodeID = identity.String()
+			}
+			if err = n.nodeList.Configure(model.NodeID(n.Config.NodeID), n.Config.PublicAddr); err != nil {
+				err = errors2.Wrap(err, "unable to configure nodelist")
+				return
+			}
 			if networkConfig, p2pErr := n.buildP2PConfig(); p2pErr != nil {
 				log.Log().Warnf("Unable to build P2P layer config, network will be offline (reason: %v)", p2pErr)
 				return
@@ -212,14 +220,9 @@ func (n *Network) buildP2PConfig() (*p2p.P2PNetworkConfig, error) {
 		NodeID:         model.NodeID(n.Config.NodeID),
 		TrustStore:     n.crypto.TrustStore(),
 	}
-	identity := core.NutsConfig().Identity()
-	if cfg.NodeID == "" {
-		log.Log().Warn("NodeID not configured, will use node identity.")
-		cfg.NodeID = model.NodeID(identity)
-	}
 	if n.Config.CertFile == "" && n.Config.CertKeyFile == "" {
 		log.Log().Info("No certificate and/or key file specified, will load TLS certificate from crypto module.")
-		entity := types.LegalEntity{URI: identity}
+		entity := types.LegalEntity{URI: core.NutsConfig().VendorID().String()}
 		tlsCertificate, privateKey, err := n.crypto.GetTLSCertificate(entity)
 		if err != nil {
 			return nil, errors2.Wrap(err, "unable to load node TLS certificate and/or key from crypto module")

@@ -34,9 +34,11 @@ func (m *MockNodeList) EXPECT() *MockNodeListMockRecorder {
 }
 
 // Configure mocks base method
-func (m *MockNodeList) Configure(nodeID model.NodeID, address string) {
+func (m *MockNodeList) Configure(nodeID model.NodeID, address string) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Configure", nodeID, address)
+	ret := m.ctrl.Call(m, "Configure", nodeID, address)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // Configure indicates an expected call of Configure
