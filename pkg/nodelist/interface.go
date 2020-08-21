@@ -31,7 +31,7 @@ func NewNodeList(log documentlog.DocumentLog, p2pNetwork p2p.P2PNetwork) NodeLis
 // NodeList is one of the applications built on top of the Nuts network which is used for discovering new nodes.
 type NodeList interface {
 	// Configure configures the NodeList. Must be called before Start().
-	Configure(nodeID model.NodeID, address string)
+	Configure(nodeID model.NodeID, address string) error
 	Start()
 	Stop()
 }
