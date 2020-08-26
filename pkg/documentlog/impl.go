@@ -75,6 +75,7 @@ func (dl *documentLog) Configure(store store.DocumentStore) {
 }
 
 func (dl *documentLog) Subscribe(documentType string) DocumentQueue {
+	log.Log().Infof("Creating subscription (document.type=%s)", documentType)
 	queue := documentQueue{
 		documentType: documentType,
 		c:            make(chan *model.Document, 100), // TODO: Does this number make sense?

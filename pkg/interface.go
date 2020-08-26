@@ -19,6 +19,7 @@
 package pkg
 
 import (
+	"github.com/nuts-foundation/nuts-network/pkg/documentlog"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"io"
 	"time"
@@ -26,6 +27,7 @@ import (
 
 // NetworkClient is the interface to be implemented by any remote or local client
 type NetworkClient interface {
+	documentlog.Publisher
 	// GetDocumentContents retrieves the document contents for the given hash. If the document of contents are not known, an error is returned.
 	GetDocumentContents(hash model.Hash) (io.ReadCloser, error)
 	// GetDocument retrieves the document for the given hash. If the document is not known, an error is returned.

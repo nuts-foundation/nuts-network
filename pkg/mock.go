@@ -6,6 +6,7 @@ package pkg
 
 import (
 	gomock "github.com/golang/mock/gomock"
+	documentlog "github.com/nuts-foundation/nuts-network/pkg/documentlog"
 	model "github.com/nuts-foundation/nuts-network/pkg/model"
 	io "io"
 	reflect "reflect"
@@ -33,6 +34,20 @@ func NewMockNetworkClient(ctrl *gomock.Controller) *MockNetworkClient {
 // EXPECT returns an object that allows the caller to indicate expected use
 func (m *MockNetworkClient) EXPECT() *MockNetworkClientMockRecorder {
 	return m.recorder
+}
+
+// Subscribe mocks base method
+func (m *MockNetworkClient) Subscribe(documentType string) documentlog.DocumentQueue {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Subscribe", documentType)
+	ret0, _ := ret[0].(documentlog.DocumentQueue)
+	return ret0
+}
+
+// Subscribe indicates an expected call of Subscribe
+func (mr *MockNetworkClientMockRecorder) Subscribe(documentType interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Subscribe", reflect.TypeOf((*MockNetworkClient)(nil).Subscribe), documentType)
 }
 
 // GetDocumentContents mocks base method

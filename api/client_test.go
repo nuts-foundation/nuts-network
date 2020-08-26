@@ -96,3 +96,11 @@ func TestHttpClient_ListDocuments(t *testing.T) {
 		assert.Equal(t, doc2.Type, documents[1].Type)
 	})
 }
+
+func TestHttpClient_Subscribe(t *testing.T) {
+	t.Run("not supported", func(t *testing.T) {
+		httpClient := HttpClient{ServerAddress: "http://foo", Timeout: time.Second}
+		queue := httpClient.Subscribe("docType")
+		assert.Nil(t, queue)
+	})
+}

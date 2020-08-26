@@ -22,6 +22,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/nuts-foundation/nuts-crypto/log"
+	"github.com/nuts-foundation/nuts-network/pkg/documentlog"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"io"
 	"io/ioutil"
@@ -34,6 +36,11 @@ import (
 type HttpClient struct {
 	ServerAddress string
 	Timeout       time.Duration
+}
+
+func (hb HttpClient) Subscribe(documentType string) documentlog.DocumentQueue {
+	log.Logger().Error("Subscribe() is not supported client mode.")
+	return nil
 }
 
 func (hb HttpClient) GetDocumentContents(hash model.Hash) (io.ReadCloser, error) {
