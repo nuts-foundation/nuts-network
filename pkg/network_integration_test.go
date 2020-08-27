@@ -74,28 +74,30 @@ func TestNetwork(t *testing.T) {
 		ID:      "bootstrap",
 		Address: "bootstrap",
 	})
-	// Register shutdown funcs
-	defer func() {
-		assert.NoError(t, node2.Shutdown())
-		assert.NoError(t, node1.Shutdown())
-		assert.NoError(t, bootstrap.Shutdown())
-	}()
+	stop := func() {
+		node2.Shutdown()
+		node1.Shutdown()
+		bootstrap.Shutdown()
+	}
 
 	//time.Sleep(1000 * time.Second)
 	// Wait until nodes are connected
 	if !waitFor(t, func() (bool, error) {
 		return len(node1.p2pNetwork.Peers()) == 2 && len(node2.p2pNetwork.Peers()) == 2, nil
 	}, defaultTimeout) {
+		stop()
 		return
 	}
 
 	// Add a document on node1 and we expect in to come out on node2
 	if addDocumentAndWaitForItToArrive(t, node1, node2) {
+		stop()
 		return
 	}
 	expectedDocLogSize++
 	// Add a document on node2 and we expect in to come out on node1
 	if addDocumentAndWaitForItToArrive(t, node2, node1) {
+		stop()
 		return
 	}
 	expectedDocLogSize++
