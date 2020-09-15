@@ -88,6 +88,16 @@ func TestNetwork_GetDocumentContents(t *testing.T) {
 	})
 }
 
+func TestNetwork_Subscribe(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	t.Run("ok", func(t *testing.T) {
+		cxt := createNetwork(t, ctrl)
+		cxt.documentLog.EXPECT().Subscribe("some-type")
+		cxt.network.Subscribe("some-type")
+	})
+}
+
 func TestNetwork_Diagnostics(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

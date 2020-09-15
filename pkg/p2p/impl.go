@@ -332,7 +332,7 @@ func (n p2pNetwork) shouldConnectTo(nodeInfo model.NodeInfo) bool {
 			for _, peer := range n.peers {
 				if peer.nodeID == nodeInfo.ID {
 					// We're not going to connect to a node we're already connected to
-					log.Log().Debugf("Not connecting since we're already connected (NodeID=%s)", nodeInfo.ID)
+					log.Log().Tracef("Not connecting since we're already connected (NodeID=%s)", nodeInfo.ID)
 					result = false
 					return
 				}
@@ -340,7 +340,7 @@ func (n p2pNetwork) shouldConnectTo(nodeInfo model.NodeInfo) bool {
 		}
 		if n.peersByAddr[normalizeAddress(nodeInfo.Address)] != nil {
 			// We're not going to connect to a node we're already connected to
-			log.Log().Debugf("Not connecting since we're already connected (address=%s)", nodeInfo.Address)
+			log.Log().Tracef("Not connecting since we're already connected (address=%s)", nodeInfo.Address)
 			result = false
 		}
 	})

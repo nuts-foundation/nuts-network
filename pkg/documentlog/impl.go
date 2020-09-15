@@ -42,7 +42,7 @@ var ErrUnknownDocument = errors.New("unknown document")
 func NewDocumentLog(protocol proto.Protocol) DocumentLog {
 	documentLog := &documentLog{
 		protocol:            protocol,
-		subscriptions:       make(map[string]documentQueue, 0),
+		subscriptions:       make(map[string][]documentQueue, 0),
 		subscriptionsMutex:  concurrency.NewSaferRWMutex("doclog-subs"),
 		lastConsistencyHash: &atomic.Value{},
 	}
@@ -55,7 +55,7 @@ type documentLog struct {
 	protocol proto.Protocol
 	store    store.DocumentStore
 
-	subscriptions       map[string]documentQueue
+	subscriptions       map[string][]documentQueue
 	subscriptionsMutex  concurrency.SaferRWMutex
 	publicAddr          string
 	advertHashTimer     *time.Ticker
@@ -75,12 +75,17 @@ func (dl *documentLog) Configure(store store.DocumentStore) {
 }
 
 func (dl *documentLog) Subscribe(documentType string) DocumentQueue {
+	log.Log().Infof("Creating subscription (document.type=%s)", documentType)
 	queue := documentQueue{
 		documentType: documentType,
 		c:            make(chan *model.Document, 100), // TODO: Does this number make sense?
 	}
 	dl.subscriptionsMutex.WriteLock(func() {
-		dl.subscriptions[documentType] = queue
+		if subs, ok := dl.subscriptions[documentType]; ok {
+			dl.subscriptions[documentType] = append(subs, queue)
+		} else {
+			dl.subscriptions[documentType] = []documentQueue{queue}
+		}
 	})
 	return &queue
 }
@@ -164,9 +169,11 @@ func (dl *documentLog) AddDocumentContents(hash model.Hash, contents io.Reader) 
 		return nil, errors2.Wrap(err, "unable to write document contents")
 	}
 	dl.subscriptionsMutex.ReadLock(func() {
-		if queue, ok := dl.subscriptions[document.Type]; ok {
-			clone := document.Document.Clone()
-			queue.c <- &clone
+		if subs, ok := dl.subscriptions[document.Type]; ok {
+			for _, queue := range subs {
+				clone := document.Document.Clone()
+				queue.c <- &clone
+			}
 		}
 	})
 	return &document.Document, nil
@@ -179,7 +186,9 @@ func (dl *documentLog) Documents() ([]model.DocumentDescriptor, error) {
 func (dl *documentLog) Stop() {
 	dl.subscriptionsMutex.WriteLock(func() {
 		for _, sub := range dl.subscriptions {
-			close(sub.c)
+			for _, queue := range sub {
+				close(queue.c)
+			}
 		}
 	})
 	dl.advertHashTimer.Stop()

@@ -123,16 +123,16 @@ func (n *Network) Configure() error {
 		}
 		if n.Config.Mode == core.ServerEngineMode {
 			n.protocol.Configure(n.p2pNetwork, n.documentLog)
-			var documentStore store.DocumentStore
-			if documentStore, err = store.CreateDocumentStore(n.Config.StorageConnectionString); err != nil {
-				return
-			}
-			n.documentLog.Configure(documentStore)
 			identity := core.NutsConfig().VendorID()
 			if n.Config.NodeID == "" {
 				log.Log().Warnf("NodeID not configured, will use node identity: %s", identity)
 				n.Config.NodeID = identity.String()
 			}
+			var documentStore store.DocumentStore
+			if documentStore, err = store.CreateDocumentStore(n.Config.StorageConnectionString); err != nil {
+				return
+			}
+			n.documentLog.Configure(documentStore)
 			if err = n.nodeList.Configure(model.NodeID(n.Config.NodeID), n.Config.PublicAddr); err != nil {
 				err = errors2.Wrap(err, "unable to configure nodelist")
 				return
@@ -148,6 +148,10 @@ func (n *Network) Configure() error {
 		}
 	})
 	return err
+}
+
+func (n *Network) Subscribe(documentType string) documentlog.DocumentQueue {
+	return n.documentLog.Subscribe(documentType)
 }
 
 // Start initiates the network subsystem

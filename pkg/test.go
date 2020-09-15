@@ -19,5 +19,6 @@ func NewTestNetworkInstance(testDirectory string) *Network {
 func TestNetworkConfig(testDirectory string) NetworkConfig {
 	config := DefaultNetworkConfig()
 	config.StorageConnectionString = "file:" + path.Join(testDirectory, "network.db")
+	config.PublicAddr = "test:5555"
 	return config
 }

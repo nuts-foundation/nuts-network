@@ -27,6 +27,7 @@ import (
 
 // DocumentLog defines the API for the DocumentLog layer, used to store/retrieve chained documents.
 type DocumentLog interface {
+	Publisher
 	proto.HashSource
 	stats.StatsProvider
 	// Configure configures this DocumentLog. Must be called before Start().
@@ -35,6 +36,10 @@ type DocumentLog interface {
 	Start()
 	// Stops the document log.
 	Stop()
+}
+
+// Publisher is a PubSub interface for documents on the document log.
+type Publisher interface {
 	// Subscribe creates a subscription for incoming documents with the specified type. It can be read from using the
 	// returned DocumentQueue. There can be multiple subscribers for the same document type. The returned queue MUST
 	// read from since it has an internal buffer which blocks the producer (the DocumentLog) when full.

@@ -188,6 +188,41 @@ func Test_DocumentLog_AddDocumentContents(t *testing.T) {
 	})
 }
 
+func Test_DocumentLog_Subscribe(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	const docType = "some-type"
+	t.Run("ok", func(t *testing.T) {
+		log := NewDocumentLog(proto.NewMockProtocol(mockCtrl)).(*documentLog)
+		queue := log.Subscribe(docType)
+		assert.NotNil(t, queue)
+		assert.Len(t, log.subscriptions, 1)
+	})
+	t.Run("ok - multiple subscriptions", func(t *testing.T) {
+		log := NewDocumentLog(proto.NewMockProtocol(mockCtrl)).(*documentLog)
+		store := store.NewMockDocumentStore(mockCtrl)
+		store.EXPECT().Get(model.EmptyHash()).Return(&model.DocumentDescriptor{
+			Document:        model.Document{Type: docType},
+		}, nil)
+		store.EXPECT().WriteContents(model.EmptyHash(), gomock.Any())
+		log.Configure(store)
+		queue1 := log.Subscribe(docType)
+		assert.NotNil(t, queue1)
+		queue2 := log.Subscribe(docType)
+		assert.NotNil(t, queue2)
+		assert.Len(t, log.subscriptions, 1)
+		assert.Len(t, log.subscriptions[docType], 2)
+
+		// Now add documents to check whether both subscription receive the document
+		_, err := log.AddDocumentContents(model.EmptyHash(), bytes.NewReader([]byte{1, 2, 3}))
+		if !assert.NoError(t, err) {
+			return
+		}
+		assert.Len(t, log.subscriptions[docType][0].c, 1)
+		assert.Len(t, log.subscriptions[docType][1].c, 1)
+	})
+}
+
 func Test_DocumentLog_HasContents(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
