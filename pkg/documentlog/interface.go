@@ -38,6 +38,7 @@ type DocumentLog interface {
 	Stop()
 }
 
+// Publisher is a PubSub interface for documents on the document log.
 type Publisher interface {
 	// Subscribe creates a subscription for incoming documents with the specified type. It can be read from using the
 	// returned DocumentQueue. There can be multiple subscribers for the same document type. The returned queue MUST

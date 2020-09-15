@@ -188,6 +188,17 @@ func Test_DocumentLog_AddDocumentContents(t *testing.T) {
 	})
 }
 
+func Test_DocumentLog_Subscribe(t *testing.T) {
+	mockCtrl := gomock.NewController(t)
+	defer mockCtrl.Finish()
+	t.Run("ok", func(t *testing.T) {
+		log := NewDocumentLog(proto.NewMockProtocol(mockCtrl)).(*documentLog)
+		queue := log.Subscribe("some-type")
+		assert.NotNil(t, queue)
+		assert.Len(t, log.subscriptions, 1)
+	})
+}
+
 func Test_DocumentLog_HasContents(t *testing.T) {
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
