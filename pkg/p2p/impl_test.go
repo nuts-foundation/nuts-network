@@ -24,3 +24,28 @@ func Test_p2pNetwork_Configure(t *testing.T) {
 		assert.Len(t, network.(*p2pNetwork).remoteNodeAddChannel, 2)
 	})
 }
+
+func Test_p2pNetwork_GetLocalAddress(t *testing.T) {
+	network := NewP2PNetwork().(*p2pNetwork)
+	ts, _ := cert.NewTrustStore(filepath.Join(os.TempDir(), "truststore.pem.test"))
+	err := network.Configure(P2PNetworkConfig{
+		NodeID:         "foo",
+		ListenAddress:  "0.0.0.0:555",
+		BootstrapNodes: []string{"foo:555", "bar:5554"},
+		TrustStore:     ts,
+	})
+	if !assert.NoError(t, err) {
+		return
+	}
+	t.Run("ok - public address not configured, listen address fully qualified", func(t *testing.T) {
+		assert.Equal(t, "0.0.0.0:555", network.getLocalAddress())
+	})
+	t.Run("ok - public address not configured, listen address contains only port", func(t *testing.T) {
+		network.config.ListenAddress = ":555"
+		assert.Equal(t, "localhost:555", network.getLocalAddress())
+	})
+	t.Run("ok - public address configured", func(t *testing.T) {
+		network.config.PublicAddress = "test:1234"
+		assert.Equal(t, "test:1234", network.getLocalAddress())
+	})
+}

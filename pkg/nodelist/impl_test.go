@@ -14,8 +14,8 @@ func Test_nodeList_Configure(t *testing.T) {
 		err := (&nodeList{}).Configure("", "foo:8080")
 		assert.EqualError(t, err, "nodeID is empty")
 	})
-	t.Run("error - address empty", func(t *testing.T) {
+	t.Run("ok - address empty", func(t *testing.T) {
 		err := (&nodeList{}).Configure("abc", "")
-		assert.EqualError(t, err, "address is empty")
+		assert.NoError(t, err)
 	})
 }
