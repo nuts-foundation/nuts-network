@@ -45,9 +45,6 @@ func (n *nodeList) Configure(nodeID model.NodeID, address string) error {
 	if nodeID.Empty() {
 		return errors.New("nodeID is empty")
 	}
-	if address == "" {
-		return errors.New("address is empty")
-	}
 	n.localNode = model.NodeInfo{
 		ID:      nodeID,
 		Address: address,

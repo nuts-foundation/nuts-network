@@ -34,6 +34,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	grpcPeer "google.golang.org/grpc/peer"
 	"net"
+	"strings"
 	"sync"
 	"time"
 )
@@ -321,7 +322,7 @@ func (n *p2pNetwork) connectToRemoteNodes() {
 
 // shouldConnectTo checks whether we should connect to the given node.
 func (n p2pNetwork) shouldConnectTo(nodeInfo model.NodeInfo) bool {
-	if normalizeAddress(nodeInfo.Address) == normalizeAddress(n.config.PublicAddress) {
+	if normalizeAddress(nodeInfo.Address) == normalizeAddress(n.getLocalAddress()) {
 		// We're not going to connect to our own node
 		log.Log().Debug("Not connecting since it's localhost")
 		return false
@@ -345,6 +346,20 @@ func (n p2pNetwork) shouldConnectTo(nodeInfo model.NodeInfo) bool {
 		}
 	})
 	return result
+}
+
+func (n p2pNetwork) getLocalAddress() string {
+	if n.config.PublicAddress != "" {
+		return n.config.PublicAddress
+	} else {
+		if strings.HasPrefix(n.config.ListenAddress, ":") {
+			// Interface's address not included in listening address (e.g. :5555), so prepend with localhost
+			return "localhost" + n.config.ListenAddress
+		} else {
+			// Interface's address included in listening address (e.g. localhost:5555), so return as-is.
+			return n.config.ListenAddress
+		}
+	}
 }
 
 func (n p2pNetwork) isRunning() bool {
