@@ -20,19 +20,26 @@ package pkg
 
 import (
 	"context"
+	"crypto/rsa"
+	"crypto/tls"
 	"fmt"
 	crypto "github.com/nuts-foundation/nuts-crypto/pkg"
+	"github.com/nuts-foundation/nuts-crypto/pkg/types"
 	core "github.com/nuts-foundation/nuts-go-core"
+	"github.com/nuts-foundation/nuts-go-test/io"
 	"github.com/nuts-foundation/nuts-network/pkg/documentlog"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/pkg/nodelist"
 	"github.com/nuts-foundation/nuts-network/pkg/p2p"
 	"github.com/nuts-foundation/nuts-network/pkg/proto"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/test/bufconn"
 	"net"
+	"os"
+	"path"
 	"sync"
 	"testing"
 	"time"
@@ -46,17 +53,18 @@ var bufconListeners = make(map[string]*bufconn.Listener, 0)
 var mutex = sync.Mutex{}
 
 func TestNetwork(t *testing.T) {
+	testDirectory := io.TestDirectory(t)
 	documentlog.AdvertHashInterval = 500 * time.Millisecond
 	expectedDocLogSize := 0
 
 	// Start 3 nodes: bootstrap, node1 and node2. Node 1 and 2 connect to the bootstrap node and should discover
 	// each other that way.
-	bootstrap, err := startNode("bootstrap")
+	bootstrap, err := startNode("bootstrap", "", path.Join(testDirectory, "bootstrap"))
 	expectedDocLogSize++ // node registration
 	if !assert.NoError(t, err) {
 		return
 	}
-	node1, err := startNode("node1")
+	node1, err := startNode("node1", "urn:oid:1.3.6.1.4.1.54851.4:1", path.Join(testDirectory, "node1"))
 	expectedDocLogSize++ // node registration
 	if !assert.NoError(t, err) {
 		return
@@ -65,7 +73,7 @@ func TestNetwork(t *testing.T) {
 		ID:      "bootstrap",
 		Address: "bootstrap",
 	})
-	node2, err := startNode("node2")
+	node2, err := startNode("node2", "urn:oid:1.3.6.1.4.1.54851.4:2", path.Join(testDirectory, "node2"))
 	expectedDocLogSize++ // node registration
 	if !assert.NoError(t, err) {
 		return
@@ -80,7 +88,6 @@ func TestNetwork(t *testing.T) {
 		bootstrap.Shutdown()
 	}
 
-	//time.Sleep(1000 * time.Second)
 	// Wait until nodes are connected
 	if !waitFor(t, func() (bool, error) {
 		return len(node1.p2pNetwork.Peers()) == 2 && len(node2.p2pNetwork.Peers()) == 2, nil
@@ -95,7 +102,7 @@ func TestNetwork(t *testing.T) {
 		return
 	}
 	expectedDocLogSize++
-	// Add a document on node2 and we expect in to come out on node1
+	// Add a document on node2 and twe expect in to come out on node1
 	if addDocumentAndWaitForItToArrive(t, node2, node1) {
 		stop()
 		return
@@ -135,19 +142,38 @@ func addDocumentAndWaitForItToArrive(t *testing.T, sender *Network, receiver *Ne
 	return false
 }
 
-func startNode(name string) (*Network, error) {
+func startNode(name string, identity string, directory string) (*Network, error) {
+	os.MkdirAll(directory, os.ModePerm)
+	os.Setenv("NUTS_IDENTITY", identity)
+	core.NutsConfig().Load(&cobra.Command{})
+	// Register gRPC internal buffered connection
 	mutex.Lock()
 	bufconListeners[name] = bufconn.Listen(bufSize)
 	mutex.Unlock()
+	// Initialize crypto instance
 	cryptoInstance := crypto.CryptoInstance()
 	cryptoInstance.Config = crypto.CryptoConfig{
 		Keysize: crypto.MinKeySize,
-		Fspath:  "../test-files",
+		Fspath:  directory,
 	}
 	logrus.SetLevel(logrus.DebugLevel)
 	if err := cryptoInstance.Configure(); err != nil {
 		return nil, err
 	}
+	// Load TLS client certificate into crypto storage. It's not actually used because we're using internal buffered gRPC connections
+	// but it has to be there.
+	keyPair, err := tls.LoadX509KeyPair("../test-files/certificate-and-key.pem", "../test-files/certificate-and-key.pem")
+	if err != nil {
+		return nil, err
+	}
+	key := types.KeyForEntity(types.LegalEntity{URI: identity}).WithQualifier(crypto.TLSCertificateQualifier)
+	if err = cryptoInstance.Storage.SaveCertificate(key, keyPair.Certificate[0]); err != nil {
+		return nil, err
+	}
+	if err = cryptoInstance.Storage.SavePrivateKey(key, keyPair.PrivateKey.(*rsa.PrivateKey)); err != nil {
+		return nil, err
+	}
+	// Create network instance
 	instance = &Network{
 		p2pNetwork: p2p.NewP2PNetworkWithOptions(bufconListeners[name], func(ctx context.Context, target string, opts ...grpc.DialOption) (conn *grpc.ClientConn, err error) {
 			dialer := grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {

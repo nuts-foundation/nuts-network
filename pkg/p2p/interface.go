@@ -76,9 +76,12 @@ type PeerMessage struct {
 type P2PNetworkConfig struct {
 	NodeID         model.NodeID
 	PublicAddress  string
+	// ListenAddress specifies the socket address the gRPC server should listen on.
+	// If not set, the node will not accept incoming connections (but outbound connections can still be made).
 	ListenAddress  string
 	BootstrapNodes []string
 	ClientCert     tls.Certificate
+	// ServerCert specifies the TLS server certificate. If set the server should open a TLS socket, otherwise plain TCP.
 	ServerCert     tls.Certificate
 	TrustStore     cert.TrustStore
 }

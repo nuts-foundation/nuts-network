@@ -1,12 +1,13 @@
-==============  =======  ================================================================================================================================================================================
-Key             Default  Description                                                                                                                                                                     
-==============  =======  ================================================================================================================================================================================
-address                  Interface and port for http server to bind to, defaults to global Nuts address.                                                                                                 
-bootstrapNodes           Space-separated list of bootstrap nodes (`<host>:<port>`) which the node initially connect to.                                                                                  
-certFile                 PEM file containing the certificate this node will identify itself with to other nodes. If not set, the Nuts node will attempt to load a TLS certificate from the crypto module.
-certKeyFile              PEM file containing the key belonging to this node's certificate. If not set, the Nuts node will attempt to load a TLS certificate from the crypto module.                      
-grpcAddr        \:5555    Local address for gRPC to listen on.                                                                                                                                            
-mode                     server or client, when client it uses the HttpClient                                                                                                                            
-nodeID                   Instance ID of this node under which the public address is registered on the nodelist. If not set, the Nuts node's identity will be used.                                       
-publicAddr               Public address (of this node) other nodes can use to connect to it. If set, it is registered on the nodelist.                                                                   
-==============  =======  ================================================================================================================================================================================
+=======================  ===============  =================================================================================================================================================================
+Key                      Default          Description                                                                                                                                                      
+=======================  ===============  =================================================================================================================================================================
+address                                   Interface and port for http server to bind to, defaults to global Nuts address.                                                                                  
+bootstrapNodes                            Space-separated list of bootstrap nodes (`<host>:<port>`) which the node initially connect to.                                                                   
+certFile                                  PEM file containing the server certificate for the gRPC server. If not set the Nuts node won't start the gRPC server and other nodes will not be able to connect.
+certKeyFile                               PEM file containing the private key of the server certificate. If not set the Nuts node won't start the gRPC server and other nodes will not be able to connect. 
+grpcAddr                 \:5555            Local address for gRPC to listen on.                                                                                                                             
+mode                                      server or client, when client it uses the HttpClient                                                                                                             
+nodeID                                    Instance ID of this node under which the public address is registered on the nodelist. If not set, the Nuts node's identity will be used.                        
+publicAddr                                Public address (of this node) other nodes can use to connect to it. If set, it is registered on the nodelist.                                                    
+storageConnectionString  file:network.db  SQLite3 connection string to the database where the network should persist its documents.                                                                        
+=======================  ===============  =================================================================================================================================================================

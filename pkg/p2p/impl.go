@@ -199,9 +199,6 @@ func (n *p2pNetwork) Configure(config P2PNetworkConfig) error {
 	if config.NodeID == "" {
 		return errors.New("NodeID is empty")
 	}
-	if config.ListenAddress == "" {
-		return errors.New("ListenAddress is empty")
-	}
 	if config.TrustStore == nil {
 		return errors.New("TrustStore is nil")
 	}
@@ -214,30 +211,36 @@ func (n *p2pNetwork) Configure(config P2PNetworkConfig) error {
 }
 
 func (n *p2pNetwork) Start() error {
-	log.Log().Infof("Starting gRPC server (ID: %s) on %s", n.config.NodeID, n.config.ListenAddress)
-	var err error
-	// We allow test code to set the listener to allow for in-memory (bufnet) channels
-	var serverOpts = make([]grpc.ServerOption, 0)
-	if n.listener == nil {
-		n.listener, err = net.Listen("tcp", n.config.ListenAddress)
-		if err != nil {
-			return err
+	log.Log().Infof("Starting gRPC P2P node (ID: %s)", n.config.NodeID)
+	if n.config.ListenAddress != "" {
+		log.Log().Infof("Starting gRPC server on %s", n.config.ListenAddress)
+		var err error
+		// We allow test code to set the listener to allow for in-memory (bufnet) channels
+		var serverOpts = make([]grpc.ServerOption, 0)
+		if n.listener == nil {
+			n.listener, err = net.Listen("tcp", n.config.ListenAddress)
+			if err != nil {
+				return err
+			}
+			if n.config.ServerCert.PrivateKey == nil {
+			} else {
+				serverOpts = append(serverOpts, grpc.Creds(credentials.NewTLS(&tls.Config{
+					Certificates: []tls.Certificate{n.config.ServerCert},
+					ClientAuth:   tls.RequireAndVerifyClientCert,
+					ClientCAs:    n.config.TrustStore.Pool(),
+				})))
+			}
 		}
-		// TODO: Verify TLS configuration
-		serverOpts = append(serverOpts, grpc.Creds(credentials.NewTLS(&tls.Config{
-			Certificates: []tls.Certificate{n.config.ServerCert},
-			ClientAuth:   tls.RequireAndVerifyClientCert,
-			ClientCAs:    n.config.TrustStore.Pool(),
-		})))
+		n.grpcServer = grpc.NewServer(serverOpts...)
+		network.RegisterNetworkServer(n.grpcServer, n)
+		go func() {
+			err = n.grpcServer.Serve(n.listener)
+			if err != nil && !errors.Is(err, grpc.ErrServerStopped) {
+				log.Log().Errorf("gRPC server errored: %v", err)
+				_ = n.Stop()
+			}
+		}()
 	}
-	n.grpcServer = grpc.NewServer(serverOpts...)
-	network.RegisterNetworkServer(n.grpcServer, n)
-	go func() {
-		err = n.grpcServer.Serve(n.listener)
-		if err != nil {
-			log.Log().Warn("grpcServer.Serve ended with err: ", err) // TODO: When does this happen?
-		}
-	}()
 	// Start client
 	go n.connectToRemoteNodes()
 	return nil
@@ -299,9 +302,7 @@ func (n *p2pNetwork) connectToRemoteNodes() {
 				for {
 					if n.shouldConnectTo(remoteNode.NodeInfo) {
 						tlsConfig := tls.Config{
-							Certificates:       []tls.Certificate{n.config.ClientCert},
-							InsecureSkipVerify: true, // TODO: Is the actually secure?
-							RootCAs:            n.config.TrustStore.Pool(),
+							Certificates: []tls.Certificate{n.config.ClientCert},
 						}
 						if peer, err := remoteNode.connect(n.config.NodeID, &tlsConfig); err != nil {
 							waitPeriod := remoteNode.backoff.Backoff()

@@ -240,30 +240,73 @@ func TestNetwork_Shutdown(t *testing.T) {
 
 func TestDefaultNetworkConfig(t *testing.T) {
 	defs := DefaultNetworkConfig()
-	assert.Equal(t, ":5555", defs.GrpcAddr)
+	assert.True(t, defs.EnableTLS)
+	assert.Equal(t, "file:network.db", defs.StorageConnectionString)
 }
 
 func TestNetwork_buildP2PNetworkConfig(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	t.Run("ok", func(t *testing.T) {
+	t.Run("ok - TLS enabled", func(t *testing.T) {
 		cxt := createNetwork(t, ctrl)
+		cxt.network.Config.GrpcAddr = ":5555"
+		cxt.network.Config.EnableTLS = true
 		cxt.network.Config.CertFile = "../test-files/certificate-and-key.pem"
 		cxt.network.Config.CertKeyFile = "../test-files/certificate-and-key.pem"
 		cxt.crypto.EXPECT().TrustStore()
+		cxt.crypto.EXPECT().GetTLSCertificate(gomock.Any()).Return(&x509.Certificate{}, &rsa.PrivateKey{}, nil)
 		cfg, err := cxt.network.buildP2PConfig()
 		assert.NotNil(t, cfg)
 		assert.NoError(t, err)
-		assert.NotNil(t, cfg.ClientCert)
-		assert.Equal(t, cfg.ClientCert, cfg.ServerCert)
+		assert.NotNil(t, cfg.ClientCert.PrivateKey)
+		assert.NotNil(t, cfg.ServerCert.PrivateKey)
+	})
+	t.Run("ok - TLS disabled", func(t *testing.T) {
+		cxt := createNetwork(t, ctrl)
+		cxt.network.Config.GrpcAddr = ":5555"
+		cxt.network.Config.EnableTLS = false
+		cxt.crypto.EXPECT().TrustStore()
+		cxt.crypto.EXPECT().GetTLSCertificate(gomock.Any()).Return(&x509.Certificate{}, &rsa.PrivateKey{}, nil)
+		cfg, err := cxt.network.buildP2PConfig()
+		assert.NotNil(t, cfg)
+		assert.NoError(t, err)
+		assert.NotNil(t, cfg.ClientCert.PrivateKey)
+		assert.Nil(t, cfg.ServerCert.PrivateKey)
+	})
+	t.Run("ok - gRPC server not bound", func(t *testing.T) {
+		cxt := createNetwork(t, ctrl)
+		cxt.network.Config.GrpcAddr = ""
+		cxt.network.Config.EnableTLS = true
+		cxt.crypto.EXPECT().TrustStore()
+		cxt.crypto.EXPECT().GetTLSCertificate(gomock.Any()).Return(&x509.Certificate{}, &rsa.PrivateKey{}, nil)
+		cfg, err := cxt.network.buildP2PConfig()
+		assert.NotNil(t, cfg)
+		assert.NoError(t, err)
+		assert.NotNil(t, cfg.ClientCert.PrivateKey)
+		assert.Nil(t, cfg.ServerCert.PrivateKey)
 	})
 	t.Run("error - unable to load key pair from file", func(t *testing.T) {
 		cxt := createNetwork(t, ctrl)
 		cxt.network.Config.CertFile = "../test-files/non-existent.pem"
+		cxt.network.Config.CertKeyFile = "../test-files/non-existent.pem"
+		cxt.network.Config.EnableTLS = true
 		cxt.crypto.EXPECT().TrustStore()
+		cxt.crypto.EXPECT().GetTLSCertificate(gomock.Any()).Return(&x509.Certificate{}, &rsa.PrivateKey{}, nil)
 		cfg, err := cxt.network.buildP2PConfig()
 		assert.Nil(t, cfg)
-		assert.EqualError(t, err, "unable to load node TLS certificate and/or key from file: open ../test-files/non-existent.pem: no such file or directory")
+		assert.EqualError(t, err, "unable to load node TLS server certificate and/or key from file: open ../test-files/non-existent.pem: no such file or directory")
+	})
+	t.Run("error - TLS enabled, certificate key file not configured", func(t *testing.T) {
+		cxt := createNetwork(t, ctrl)
+		cxt.network.Config.GrpcAddr = ":5555"
+		cxt.network.Config.EnableTLS = true
+		cxt.network.Config.CertFile = "../test-files/certificate-and-key.pem"
+		cxt.network.Config.CertKeyFile = ""
+		cxt.crypto.EXPECT().TrustStore()
+		cxt.crypto.EXPECT().GetTLSCertificate(gomock.Any()).Return(&x509.Certificate{}, &rsa.PrivateKey{}, nil)
+		cfg, err := cxt.network.buildP2PConfig()
+		assert.Nil(t, cfg)
+		assert.EqualError(t, err, "certFile and certKeyFile must be configured when enableTLS=true")
 	})
 	t.Run("error - unable to load key pair from crypto", func(t *testing.T) {
 		cxt := createNetwork(t, ctrl)
@@ -271,7 +314,7 @@ func TestNetwork_buildP2PNetworkConfig(t *testing.T) {
 		cxt.crypto.EXPECT().GetTLSCertificate(gomock.Any()).Return(nil, nil, errors.New("failed"))
 		cfg, err := cxt.network.buildP2PConfig()
 		assert.Nil(t, cfg)
-		assert.EqualError(t, err, "unable to load node TLS certificate and/or key from crypto module: failed")
+		assert.EqualError(t, err, "unable to load node TLS client certificate and/or key from crypto module: failed")
 	})
 }
 

@@ -50,6 +50,8 @@ type NetworkConfig struct {
 	Mode                    string
 	StorageConnectionString string
 	Address                 string
+	// EnableTLS specifies whether to enable TLS for incoming connections.
+	EnableTLS bool
 	// Public address of this nodes other nodes can use to connect to this node.
 	PublicAddr     string
 	BootstrapNodes string
@@ -61,8 +63,8 @@ type NetworkConfig struct {
 // DefaultNetworkConfig returns the default network configuration.
 func DefaultNetworkConfig() NetworkConfig {
 	return NetworkConfig{
-		GrpcAddr:                ":5555",
 		StorageConnectionString: "file:network.db",
+		EnableTLS:               true,
 	}
 }
 
@@ -224,30 +226,31 @@ func (n *Network) buildP2PConfig() (*p2p.P2PNetworkConfig, error) {
 		NodeID:         model.NodeID(n.Config.NodeID),
 		TrustStore:     n.crypto.TrustStore(),
 	}
-	if n.Config.CertFile == "" && n.Config.CertKeyFile == "" {
-		log.Log().Info("No certificate and/or key file specified, will load TLS certificate from crypto module.")
-		entity := types.LegalEntity{URI: core.NutsConfig().VendorID().String()}
-		tlsCertificate, privateKey, err := n.crypto.GetTLSCertificate(entity)
-		if err != nil {
-			return nil, errors2.Wrap(err, "unable to load node TLS certificate and/or key from crypto module")
-		}
-		if tlsCertificate == nil || privateKey == nil {
-			if tlsCertificate, privateKey, err = n.crypto.RenewTLSCertificate(entity); err != nil {
-				return nil, errors2.Wrap(err, "unable to renew node TLS certificate")
-			}
-		}
-		cfg.ServerCert = tls.Certificate{
-			Certificate: [][]byte{tlsCertificate.Raw},
-			PrivateKey:  privateKey,
-			Leaf:        tlsCertificate,
-		}
-	} else {
-		log.Log().Info("Will load TLS certificate from specified certificate/key file")
-		var err error
-		if cfg.ServerCert, err = tls.LoadX509KeyPair(n.Config.CertFile, n.Config.CertKeyFile); err != nil {
-			return nil, errors2.Wrap(err, "unable to load node TLS certificate and/or key from file")
+
+	// Load TLS client certificate
+	entity := types.LegalEntity{URI: core.NutsConfig().VendorID().String()}
+	clientCertificate, clientPrivateKey, err := n.crypto.GetTLSCertificate(entity)
+	if err != nil {
+		return nil, errors2.Wrap(err, "unable to load node TLS client certificate and/or key from crypto module")
+	}
+	if clientCertificate == nil || clientPrivateKey == nil {
+		if clientCertificate, clientPrivateKey, err = n.crypto.RenewTLSCertificate(entity); err != nil {
+			return nil, errors2.Wrap(err, "unable to renew node TLS client certificate")
 		}
 	}
-	cfg.ClientCert = cfg.ServerCert
+	cfg.ClientCert = tls.Certificate{
+		Certificate: [][]byte{clientCertificate.Raw},
+		PrivateKey:  clientPrivateKey,
+		Leaf:        clientCertificate,
+	}
+	// Load TLS server certificate, only if enableTLS=true and gRPC server should be started.
+	if n.Config.GrpcAddr != "" && n.Config.EnableTLS {
+		if n.Config.CertFile == "" || n.Config.CertKeyFile == "" {
+			return nil, errors2.New("certFile and certKeyFile must be configured when enableTLS=true")
+		}
+		if cfg.ServerCert, err = tls.LoadX509KeyPair(n.Config.CertFile, n.Config.CertKeyFile); err != nil {
+			return nil, errors2.Wrap(err, "unable to load node TLS server certificate and/or key from file")
+		}
+	}
 	return &cfg, nil
 }
