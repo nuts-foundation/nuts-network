@@ -123,10 +123,12 @@ type remoteNode struct {
 
 func (r *remoteNode) connect(nodeId model.NodeID, config *tls.Config) (*peer, error) {
 	log.Log().Infof("Connecting to node: %s", r.NodeInfo)
-	// TODO: Is this the right context?
 	cxt := metadata.NewOutgoingContext(context.Background(), constructMetadata(nodeId))
 	dialContext, _ := context.WithTimeout(cxt, 5*time.Second)
-	conn, err := r.Dialer(dialContext, r.NodeInfo.Address, grpc.WithBlock(), grpc.WithTransportCredentials(credentials.NewTLS(config)))
+	conn, err := r.Dialer(dialContext, r.NodeInfo.Address,
+		grpc.WithBlock(), // Dial should block until connection succeeded (or time-out expired)
+		grpc.WithTransportCredentials(credentials.NewTLS(config)), // TLS authentication
+		grpc.WithReturnConnectionError()) // This option causes underlying errors to be returned when connections fail, rather than just "context deadline exceeded"
 	if err != nil {
 		return nil, errors2.Wrap(err, "unable to connect")
 	}
@@ -223,6 +225,7 @@ func (n *p2pNetwork) Start() error {
 				return err
 			}
 			if n.config.ServerCert.PrivateKey == nil {
+				log.Log().Info("TLS is disabled on gRPC server side! Make sure SSL/TLS offloading is properly configured.")
 			} else {
 				serverOpts = append(serverOpts, grpc.Creds(credentials.NewTLS(&tls.Config{
 					Certificates: []tls.Certificate{n.config.ServerCert},
