@@ -80,7 +80,7 @@ func (p protocol) ReceivedConsistencyHashes() PeerHashQueue {
 
 func (p protocol) AdvertConsistencyHash(hash model.Hash) {
 	msg := createMessage()
-	msg.AdvertHash = &network.AdvertHash{Hash: hash}
+	msg.AdvertHash = &network.AdvertHash{Hash: hash.Slice()}
 	p.p2pNetwork.Broadcast(&msg)
 }
 

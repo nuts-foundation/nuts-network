@@ -12,14 +12,14 @@ func (p *protocol) handleAdvertHash(peer model.PeerID, advertHash *network.Adver
 	log.Log().Tracef("Received adverted hash from peer: %s", peer)
 	peerHash := PeerHash{
 		Peer: peer,
-		Hash: advertHash.Hash,
+		Hash: model.SliceToHash(advertHash.Hash),
 	}
 	p.newPeerHashChannel <- peerHash
 	p.receivedConsistencyHashes.c <- &peerHash
 }
 
 func (p *protocol) handleDocumentContents(peer model.PeerID, contents *network.DocumentContents) {
-	hash := model.Hash(contents.Hash)
+	hash := model.SliceToHash(contents.Hash)
 	log.Log().Infof("Received document contents from peer (peer=%s,hash=%s,len=%d)", peer, hash, len(contents.Contents))
 	// TODO: Maybe this should be asynchronous since writing the document contents might be I/O heavy?
 	if _, err := p.hashSource.AddDocumentContents(hash, bytes.NewReader(contents.Contents)); err != nil {
@@ -28,7 +28,7 @@ func (p *protocol) handleDocumentContents(peer model.PeerID, contents *network.D
 }
 
 func (p *protocol) handleDocumentContentsQuery(peer model.PeerID, query *network.DocumentContentsQuery) error {
-	hash := model.Hash(query.Hash)
+	hash := model.SliceToHash(query.Hash)
 	log.Log().Tracef("Received document contents query from peer (peer=%s, hash=%s)", peer, hash)
 	// TODO: Maybe this should be asynchronous since loading document contents might be I/O heavy?
 	if contentsExist, err := p.hashSource.HasContentsForDocument(hash); err != nil {
@@ -42,7 +42,7 @@ func (p *protocol) handleDocumentContentsQuery(peer model.PeerID, query *network
 			log.Log().Warnf("Unable to read document contents (hash=%s): %v", hash, err)
 		} else {
 			responseMsg.DocumentContents = &network.DocumentContents{
-				Hash:     hash,
+				Hash:     query.Hash,
 				Contents: buffer.Bytes(),
 			}
 			if err := p.p2pNetwork.Send(peer, &responseMsg); err != nil {
@@ -59,7 +59,7 @@ func (p *protocol) handleHashList(peer model.PeerID, hashList *network.HashList)
 	log.Log().Tracef("Received hash list from peer (peer=%s)", peer)
 	var documents = make([]model.Document, len(hashList.Hashes))
 	for i, current := range hashList.Hashes {
-		hash := model.Hash(current.Hash)
+		hash := model.SliceToHash(current.Hash)
 		if hash.Empty() {
 			log.Log().Warn("Received document doesn't contain a hash, skipping.")
 		}
@@ -69,7 +69,7 @@ func (p *protocol) handleHashList(peer model.PeerID, hashList *network.HashList)
 		documents[i] = model.Document{
 			Type:      current.Type,
 			Timestamp: time.Unix(0, current.Time),
-			Hash:      current.Hash,
+			Hash:      hash,
 		}
 	}
 	for _, document := range documents {
@@ -96,7 +96,7 @@ func (p *protocol) checkDocumentOnLocalNode(peer model.PeerID, peerDocument mode
 	//   document contents. We need a smarter way to get it from a peer who does.
 	log.Log().Infof("Received document hash from peer that we don't have yet or we're missing its contents, will query it (peer=%s,hash=%s)", peer, peerDocument.Hash)
 	responseMsg := createMessage()
-	responseMsg.DocumentContentsQuery = &network.DocumentContentsQuery{Hash: peerDocument.Hash}
+	responseMsg.DocumentContentsQuery = &network.DocumentContentsQuery{Hash: peerDocument.Hash.Slice()}
 	return p.p2pNetwork.Send(peer, &responseMsg)
 }
 
@@ -110,11 +110,11 @@ func (p *protocol) handleHashListQuery(peer model.PeerID) error {
 	msg.HashList = &network.HashList{
 		Hashes: make([]*network.Document, len(documents)),
 	}
-	for i, hash := range documents {
+	for i, document := range documents {
 		msg.HashList.Hashes[i] = &network.Document{
-			Time: hash.Timestamp.UnixNano(),
-			Hash: hash.Hash,
-			Type: hash.Type,
+			Time: document.Timestamp.UnixNano(),
+			Hash: document.Hash.Slice(),
+			Type: document.Type,
 		}
 	}
 	if err := p.p2pNetwork.Send(peer, &msg); err != nil {
