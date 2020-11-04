@@ -32,11 +32,11 @@ import (
 const HashSize = 20
 
 // Hash is a type that holds a hash used on the network.
-type Hash []byte
+type Hash [HashSize]byte
 
 // EmptyHash returns a Hash that is empty (initialized with zeros).
 func EmptyHash() Hash {
-	return make([]byte, HashSize)
+	return [HashSize]byte{}
 }
 
 // Empty tests whether the Hash is empty (all zeros).
@@ -53,18 +53,35 @@ func (h Hash) Empty() bool {
 // Clone returns a copy of the Hash.
 func (h Hash) Clone() Hash {
 	clone := EmptyHash()
-	copy(clone, h)
+	copy(clone[:], h[:])
 	return clone
+}
+
+// Slice returns the Hash as a slice. It does not copy the array.
+func (h Hash) Slice() []byte {
+	return h[:]
 }
 
 // Equals determines whether the given Hash is exactly the same (bytes match).
 func (h Hash) Equals(other Hash) bool {
-	return bytes.Compare(h, other) == 0
+	return h.Compare(other) == 0
+}
+
+// Compare compares this Hash to another Hash using bytes.Compare.
+func (h Hash) Compare(other Hash) int {
+	return bytes.Compare(h[:], other[:])
 }
 
 // String returns the Hash in serialized (and human-readable) form.
 func (h Hash) String() string {
-	return hex.EncodeToString(h)
+	return hex.EncodeToString(h[:])
+}
+
+// SliceToHash converts a byte slice to a Hash, returning a copy.
+func SliceToHash(slice []byte) Hash {
+	result := EmptyHash()
+	copy(result[:], slice)
+	return result
 }
 
 // ParseHash parses the given input string as Hash. If the input is invalid and can't be parsed as Hash, an error is returned.
@@ -74,12 +91,14 @@ func ParseHash(input string) (Hash, error) {
 	}
 	data, err := hex.DecodeString(input)
 	if err != nil {
-		return nil, err
+		return EmptyHash(), err
 	}
 	if len(data) != HashSize {
-		return nil, fmt.Errorf("incorrect hash length (%d)", len(data))
+		return EmptyHash(), fmt.Errorf("incorrect hash length (%d)", len(data))
 	}
-	return data, nil
+	result := EmptyHash()
+	copy(result[0:], data)
+	return result, nil
 }
 
 // MakeConsistencyHash calculates a consistency hash for the given 2 input Hashes and returns it.
@@ -126,9 +145,9 @@ type DocumentDescriptor struct {
 // Document describes a document on the network.
 type Document struct {
 	// Hash contains the hash of the document (which is calculated using its type, timestamp and contents).
-	Hash      Hash
+	Hash Hash
 	// Type contains a key describing what the document holds (e.g. 'nuts.node-info'). It is free format.
-	Type      string
+	Type string
 	// Timestamp holds the moment the document was created. When serialized (for storage or transport on the network) it is converted to UTC and represented in Unix nanoseconds.
 	Timestamp time.Time
 }
@@ -136,11 +155,7 @@ type Document struct {
 // Clone makes a deep copy of the document and returns it.
 func (d Document) Clone() Document {
 	cp := d
-	if cp.Hash == nil {
-		cp.Hash = nil
-	} else {
-		cp.Hash = cp.Hash.Clone()
-	}
+	cp.Hash = cp.Hash.Clone()
 	return cp
 }
 
@@ -151,14 +166,13 @@ func CalculateDocumentHash(docType string, timestamp time.Time, contents []byte)
 		Timestamp int64  `json:"timestamp"`
 		Contents  []byte `json:"contents"`
 	}{docType, timestamp.UTC().UnixNano(), contents})
-	h := sha1.Sum(data)
-	return h[:]
+	return sha1.Sum(data)
 }
 
 // NodeInfo describes a known remote node on the network.
 type NodeInfo struct {
 	// ID holds the NodeID by which we know the node.
-	ID      NodeID
+	ID NodeID
 	// Address holds the remote address of the node.
 	Address string
 }

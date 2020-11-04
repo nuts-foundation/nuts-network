@@ -250,7 +250,7 @@ func Test_sqlDocumentStore_ReadContents(t *testing.T) {
 	docStore := new(sqlDocumentStore)
 	t.Run("error - document doesn't exist", func(t *testing.T) {
 		defer createDatabase(docStore)()
-		contents, err := docStore.ReadContents([]byte("1234"))
+		contents, err := docStore.ReadContents(model.SliceToHash([]byte{1, 2, 3}))
 		assert.Error(t, err)
 		assert.Nil(t, contents)
 	})

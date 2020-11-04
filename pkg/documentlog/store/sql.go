@@ -155,7 +155,7 @@ func (s sqlDocumentStore) updateConsistencyHashes(tx *gorm.DB, startPoint model.
 	for _, document := range documents {
 		hash, err := model.ParseHash(document.Hash)
 		if err != nil {
-			return consistencyHash, err
+			return model.EmptyHash(), err
 		}
 		consistencyHash = model.MakeConsistencyHash(consistencyHash, hash)
 		query := tx.Table(documentTable).Where("hash = ?", document.Hash).UpdateColumn("consistency_hash", consistencyHash.String())
