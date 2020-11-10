@@ -33,10 +33,9 @@ import (
 )
 
 func Test_DocumentLog_AddDocument(t *testing.T) {
-	mockCtrl := gomock.NewController(t)
-	defer mockCtrl.Finish()
-
 	t.Run("ok", func(t *testing.T) {
+		mockCtrl := gomock.NewController(t)
+		defer mockCtrl.Finish()
 		protocol := proto.NewMockProtocol(mockCtrl)
 		documentStore := store.NewMockDocumentStore(mockCtrl)
 		documentStore.EXPECT().Get(gomock.Any())
@@ -54,6 +53,8 @@ func Test_DocumentLog_AddDocument(t *testing.T) {
 		}
 	})
 	t.Run("ok - multiple, random order", func(t *testing.T) {
+		mockCtrl := gomock.NewController(t)
+		defer mockCtrl.Finish()
 		var protocol = proto.NewMockProtocol(mockCtrl)
 		documentStore := store.NewMockDocumentStore(mockCtrl)
 		log := NewDocumentLog(protocol).(*documentLog)
@@ -71,6 +72,8 @@ func Test_DocumentLog_AddDocument(t *testing.T) {
 		}
 	})
 	t.Run("ok - already exists", func(t *testing.T) {
+		mockCtrl := gomock.NewController(t)
+		defer mockCtrl.Finish()
 		expected := model.DocumentDescriptor{
 			Document: model.Document{
 				Type:      "test",
@@ -86,6 +89,8 @@ func Test_DocumentLog_AddDocument(t *testing.T) {
 		assert.NoError(t, err)
 	})
 	t.Run("error - already exists, different timestamp", func(t *testing.T) {
+		mockCtrl := gomock.NewController(t)
+		defer mockCtrl.Finish()
 		expected := model.DocumentDescriptor{
 			Document: model.Document{
 				Type:      "test",
@@ -97,8 +102,17 @@ func Test_DocumentLog_AddDocument(t *testing.T) {
 		documentStore.EXPECT().Get(gomock.Any()).Return(&expected, nil)
 		log := NewDocumentLog(protocol).(*documentLog)
 		log.Configure(documentStore)
+		err := log.addDocument(model.Document{Timestamp: time.Now()})
+		assert.Contains(t, err.Error(), "is already present with different timestamp")
+	})
+	t.Run("error - timestamp is zero", func(t *testing.T) {
+		mockCtrl := gomock.NewController(t)
+		defer mockCtrl.Finish()
+		protocol := proto.NewMockProtocol(mockCtrl)
+		log := NewDocumentLog(protocol).(*documentLog)
+		log.Configure(store.NewMockDocumentStore(mockCtrl))
 		err := log.addDocument(model.Document{})
-		assert.Error(t, err)
+		assert.EqualError(t, err, "document timestamp is zero")
 	})
 }
 
@@ -202,7 +216,7 @@ func Test_DocumentLog_Subscribe(t *testing.T) {
 		log := NewDocumentLog(proto.NewMockProtocol(mockCtrl)).(*documentLog)
 		store := store.NewMockDocumentStore(mockCtrl)
 		store.EXPECT().Get(model.EmptyHash()).Return(&model.DocumentDescriptor{
-			Document:        model.Document{Type: docType},
+			Document: model.Document{Type: docType},
 		}, nil)
 		store.EXPECT().WriteContents(model.EmptyHash(), gomock.Any())
 		log.Configure(store)
@@ -281,7 +295,7 @@ func Test_DocumentLog_Diagnostics(t *testing.T) {
 		log := NewDocumentLog(protocol).(*documentLog)
 		log.Configure(documentStore)
 		go func() {
-			log.addDocument(model.Document{})
+			log.addDocument(model.Document{Timestamp: time.Now()})
 		}()
 		log.Statistics() // this should trigger a race condition if we had no locks
 		time.Sleep(time.Second / 10)

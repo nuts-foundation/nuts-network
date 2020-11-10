@@ -103,8 +103,7 @@ func (dl documentLog) GetDocumentContents(hash model.Hash) (io.ReadCloser, error
 }
 
 func (dl *documentLog) AddDocument(document model.Document) error {
-	_, err := dl.store.Add(document)
-	return err
+	return dl.addDocument(document)
 }
 
 func (dl *documentLog) HasContentsForDocument(hash model.Hash) (bool, error) {
@@ -135,6 +134,9 @@ func (dl *documentLog) AddDocumentWithContents(timestamp time.Time, documentType
 }
 
 func (dl *documentLog) addDocument(document model.Document) error {
+	if document.Timestamp.IsZero() {
+		return errors.New("document timestamp is zero")
+	}
 	existing, err := dl.store.Get(document.Hash)
 	if err != nil {
 		return err
@@ -162,7 +164,7 @@ func (dl *documentLog) AddDocumentContents(hash model.Hash, contents io.Reader) 
 	} else if document == nil {
 		return nil, ErrUnknownDocument
 	} else if document.HasContents {
-		log.Log().Debugf("Ignoring AddDocumentContents()  for document %s since we already have its contents", document.Hash)
+		log.Log().Debugf("Ignoring AddDocumentContents() for document %s since we already have its contents", document.Hash)
 		return &document.Document, nil
 	}
 	if err := dl.store.WriteContents(hash, contents); err != nil {
