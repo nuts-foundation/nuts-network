@@ -99,7 +99,7 @@ func (hb HttpClient) AddDocumentWithContents(timestamp time.Time, docType string
 	defer cancel()
 	res, err := hb.client().AddDocument(ctx, AddDocumentJSONRequestBody{
 		Contents:  contents,
-		Timestamp: timestamp.UnixNano(),
+		Timestamp: model.MarshalDocumentTime(timestamp),
 		Type:      docType,
 	})
 	if err != nil {
@@ -154,7 +154,7 @@ func testResponseCode(expectedStatusCode int, response *http.Response) error {
 }
 
 func (d *Document) fromModel(document model.Document) {
-	d.Timestamp = document.Timestamp.UnixNano()
+	d.Timestamp = model.MarshalDocumentTime(document.Timestamp)
 	d.Hash = document.Hash.String()
 	d.Type = document.Type
 }
@@ -164,6 +164,6 @@ func (d Document) toModel() model.Document {
 	return model.Document{
 		Hash:      hash,
 		Type:      d.Type,
-		Timestamp: time.Unix(0, d.Timestamp),
+		Timestamp: model.UnmarshalDocumentTime(d.Timestamp),
 	}
 }

@@ -165,7 +165,7 @@ func CalculateDocumentHash(docType string, timestamp time.Time, contents []byte)
 		DocType   string `json:"type"`
 		Timestamp int64  `json:"timestamp"`
 		Contents  []byte `json:"contents"`
-	}{docType, timestamp.UTC().UnixNano(), contents})
+	}{docType, MarshalDocumentTime(timestamp), contents})
 	return sha1.Sum(data)
 }
 

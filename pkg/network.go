@@ -190,7 +190,7 @@ func (n *Network) ListDocuments() ([]model.DocumentDescriptor, error) {
 }
 
 func (n *Network) AddDocumentWithContents(timestamp time.Time, docType string, contents []byte) (*model.Document, error) {
-	log.Log().Infof("Adding document (timestamp=%d,type=%s,content length=%d)", timestamp.UnixNano(), docType, len(contents))
+	log.Log().Infof("Adding document (timestamp=%d,type=%s,content length=%d)", model.MarshalDocumentTime(timestamp), docType, len(contents))
 	// TODO: Validation
 	return n.documentLog.AddDocumentWithContents(timestamp, docType, bytes.NewReader(contents))
 }

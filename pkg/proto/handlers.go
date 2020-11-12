@@ -5,7 +5,6 @@ import (
 	log "github.com/nuts-foundation/nuts-network/logging"
 	"github.com/nuts-foundation/nuts-network/network"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
-	"time"
 )
 
 func (p *protocol) handleAdvertHash(peer model.PeerID, advertHash *network.AdvertHash) {
@@ -62,13 +61,15 @@ func (p *protocol) handleHashList(peer model.PeerID, hashList *network.HashList)
 		hash := model.SliceToHash(current.Hash)
 		if hash.Empty() {
 			log.Log().Warn("Received document doesn't contain a hash, skipping.")
+			continue
 		}
 		if current.Time == 0 {
 			log.Log().Warnf("Received document doesn't contain a timestamp, skipping (hash=%s).", hash)
+			continue
 		}
 		documents[i] = model.Document{
 			Type:      current.Type,
-			Timestamp: time.Unix(0, current.Time),
+			Timestamp: model.UnmarshalDocumentTime(current.Time),
 			Hash:      hash,
 		}
 	}
@@ -112,7 +113,7 @@ func (p *protocol) handleHashListQuery(peer model.PeerID) error {
 	}
 	for i, document := range documents {
 		msg.HashList.Hashes[i] = &network.Document{
-			Time: document.Timestamp.UnixNano(),
+			Time: model.MarshalDocumentTime(document.Timestamp),
 			Hash: document.Hash.Slice(),
 			Type: document.Type,
 		}

@@ -143,9 +143,10 @@ func (dl *documentLog) addDocument(document model.Document) error {
 	}
 	if existing != nil {
 		// Hash already present, but check if the timestamp matches, just to be sure
-		t := existing.Document.Timestamp.UnixNano()
-		if t != document.Timestamp.UnixNano() {
-			return fmt.Errorf("document hash %s with timestamp %d is already present with different timestamp (%d)", document.Hash, document.Timestamp.UnixNano(), t)
+		existingTime := model.MarshalDocumentTime(existing.Document.Timestamp)
+		currentTime := model.MarshalDocumentTime(document.Timestamp)
+		if existingTime != currentTime {
+			return fmt.Errorf("document hash %s with timestamp %d is already present with different timestamp (%d)", document.Hash, currentTime, existingTime)
 		}
 		return nil
 	}

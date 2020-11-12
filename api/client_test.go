@@ -56,7 +56,7 @@ func TestDocument_toModel(t *testing.T) {
 	expected := model.Document{
 		Hash:      test.StringToHash("37076f2cbe014a109d79b61ae9c7191f4cc57afc"),
 		Type:      "test",
-		Timestamp: time.Unix(0, 1591255458635412720),
+		Timestamp: time.Unix(0, 1591255458635412720).UTC(),
 	}
 	actual := Document{
 		Hash:      "37076f2cbe014a109d79b61ae9c7191f4cc57afc",

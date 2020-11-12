@@ -37,7 +37,6 @@ import (
 	_ "github.com/jinzhu/gorm/dialects/sqlite"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"io"
-	"time"
 )
 
 const documentTable = "document"
@@ -97,7 +96,7 @@ func (d sqlDocument) descriptor() model.DocumentDescriptor {
 		Document: model.Document{
 			Hash:      hash,
 			Type:      d.Type,
-			Timestamp: time.Unix(0, d.Timestamp).UTC(),
+			Timestamp: model.UnmarshalDocumentTime(d.Timestamp),
 		},
 	}
 }
@@ -111,7 +110,7 @@ func (s sqlDocumentStore) Add(document model.Document) (model.Hash, error) {
 		if err := tx.Table(documentTable).Create(sqlDocument{
 			Hash:      document.Hash.String(),
 			Type:      document.Type,
-			Timestamp: document.Timestamp.UTC().UnixNano(),
+			Timestamp: model.MarshalDocumentTime(document.Timestamp),
 		}).Error; err != nil {
 			return err
 		}
@@ -142,7 +141,7 @@ func (s sqlDocumentStore) updateConsistencyHashes(tx *gorm.DB, startPoint model.
 	documents := make([]sqlDocument, 0)
 	query := tx.Table(documentTable).
 		Select(documentSelectCols).
-		Where("timestamp >= ?", startPoint.Timestamp.UTC().UnixNano())
+		Where("timestamp >= ?", model.MarshalDocumentTime(startPoint.Timestamp))
 	for _, prevRecord := range prevRecords {
 		query = query.Where("hash <> ?", prevRecord.Hash.String())
 	}
@@ -276,7 +275,7 @@ func (s sqlDocumentStore) LastConsistencyHash() model.Hash {
 // are in order as they appear in the chain (ordered by hash).
 func (s sqlDocumentStore) findPredecessors(tx *gorm.DB, before model.Document) ([]model.DocumentDescriptor, error) {
 	documents := make([]sqlDocument, 0)
-	ts := before.Timestamp.UTC().UnixNano()
+	ts := model.MarshalDocumentTime(before.Timestamp)
 	// Query is in raw form, because I couldn't built it using gorm (missing unions and select-from-subquery).
 	err := tx.Raw(`SELECT * FROM (
 	  SELECT * FROM document WHERE hash <> ? AND timestamp = ?
