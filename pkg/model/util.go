@@ -13,7 +13,7 @@ func MarshalDocumentTime(ts time.Time) int64 {
 
 // UnmarshalDocumentTime converts a document's timestamp in unix nanoseconds to time.Time.
 func UnmarshalDocumentTime(ns int64) time.Time {
-	if ns == 0 {
+	if ns <= 0 {
 		return time.Time{}
 	} else {
 		return time.Unix(0, ns).UTC()

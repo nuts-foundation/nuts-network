@@ -74,8 +74,12 @@ func (p *protocol) handleHashList(peer model.PeerID, hashList *network.HashList)
 		}
 	}
 	for _, document := range documents {
+		if p.documentIgnoreList[document.Hash] {
+			continue
+		}
 		if err := p.checkDocumentOnLocalNode(peer, document); err != nil {
-			log.Log().Errorf("Error while checking peer document on local node (peer=%s, document=%s): %v", peer, document.Hash, err)
+			log.Log().Errorf("Error while checking peer document on local node, ignoring it until next restart (peer=%s, document=%s): %v", peer, document.Hash, err)
+			p.documentIgnoreList[document.Hash] = true
 		}
 	}
 	return nil
@@ -93,7 +97,7 @@ func (p *protocol) checkDocumentOnLocalNode(peer model.PeerID, peerDocument mode
 			return err
 		}
 	}
-	// TODO: Currently we send the query to the peer that send us the hash, but this peer might not have the
+	// TODO: Currently we send the query to the peer that sent us the hash, but this peer might not have the
 	//   document contents. We need a smarter way to get it from a peer who does.
 	log.Log().Infof("Received document hash from peer that we don't have yet or we're missing its contents, will query it (peer=%s,hash=%s)", peer, peerDocument.Hash)
 	responseMsg := createMessage()
