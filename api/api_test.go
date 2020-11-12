@@ -49,7 +49,7 @@ func TestApiWrapper_AddDocument(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		var networkClient = pkg.NewMockNetworkClient(mockCtrl)
 		e, wrapper := initMockEcho(networkClient)
-		networkClient.EXPECT().AddDocumentWithContents(document.Timestamp, document.Type, documentContents).Return(&document, nil)
+		networkClient.EXPECT().AddDocumentWithContents(document.Timestamp.UTC(), document.Type, documentContents).Return(&document, nil)
 
 		input := DocumentWithContents{
 			Contents:  documentContents,

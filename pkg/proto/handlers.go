@@ -5,7 +5,6 @@ import (
 	log "github.com/nuts-foundation/nuts-network/logging"
 	"github.com/nuts-foundation/nuts-network/network"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
-	"time"
 )
 
 func (p *protocol) handleAdvertHash(peer model.PeerID, advertHash *network.AdvertHash) {
@@ -62,19 +61,25 @@ func (p *protocol) handleHashList(peer model.PeerID, hashList *network.HashList)
 		hash := model.SliceToHash(current.Hash)
 		if hash.Empty() {
 			log.Log().Warn("Received document doesn't contain a hash, skipping.")
+			continue
 		}
 		if current.Time == 0 {
 			log.Log().Warnf("Received document doesn't contain a timestamp, skipping (hash=%s).", hash)
+			continue
 		}
 		documents[i] = model.Document{
 			Type:      current.Type,
-			Timestamp: time.Unix(0, current.Time),
+			Timestamp: model.UnmarshalDocumentTime(current.Time),
 			Hash:      hash,
 		}
 	}
 	for _, document := range documents {
+		if p.documentIgnoreList[document.Hash] {
+			continue
+		}
 		if err := p.checkDocumentOnLocalNode(peer, document); err != nil {
-			log.Log().Errorf("Error while checking peer document on local node (peer=%s, document=%s): %v", peer, document.Hash, err)
+			log.Log().Errorf("Error while checking peer document on local node, ignoring it until next restart (peer=%s, document=%s): %v", peer, document.Hash, err)
+			p.documentIgnoreList[document.Hash] = true
 		}
 	}
 	return nil
@@ -92,7 +97,7 @@ func (p *protocol) checkDocumentOnLocalNode(peer model.PeerID, peerDocument mode
 			return err
 		}
 	}
-	// TODO: Currently we send the query to the peer that send us the hash, but this peer might not have the
+	// TODO: Currently we send the query to the peer that sent us the hash, but this peer might not have the
 	//   document contents. We need a smarter way to get it from a peer who does.
 	log.Log().Infof("Received document hash from peer that we don't have yet or we're missing its contents, will query it (peer=%s,hash=%s)", peer, peerDocument.Hash)
 	responseMsg := createMessage()
@@ -112,7 +117,7 @@ func (p *protocol) handleHashListQuery(peer model.PeerID) error {
 	}
 	for i, document := range documents {
 		msg.HashList.Hashes[i] = &network.Document{
-			Time: document.Timestamp.UnixNano(),
+			Time: model.MarshalDocumentTime(document.Timestamp),
 			Hash: document.Hash.Slice(),
 			Type: document.Type,
 		}

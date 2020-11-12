@@ -27,7 +27,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"time"
 )
 
 // ApiWrapper is needed to connect the implementation to the echo ServiceWrapper
@@ -90,7 +89,7 @@ func (a ApiWrapper) AddDocument(ctx echo.Context) error {
 		logging.Log().Warnf("Unable to parse document: %v", err)
 		return ctx.String(http.StatusBadRequest, err.Error())
 	}
-	outputDocument, err := a.Service.AddDocumentWithContents(time.Unix(0, inputDocument.Timestamp), inputDocument.Type, inputDocument.Contents)
+	outputDocument, err := a.Service.AddDocumentWithContents(model.UnmarshalDocumentTime(inputDocument.Timestamp), inputDocument.Type, inputDocument.Contents)
 	if err != nil {
 		logging.Log().Warnf("Unable to add document: %v", err)
 		return ctx.String(http.StatusInternalServerError, err.Error())
@@ -101,7 +100,7 @@ func (a ApiWrapper) AddDocument(ctx echo.Context) error {
 func writeDocument(ctx echo.Context, statusCode int, document model.Document) error {
 	return ctx.JSON(statusCode, Document{
 		Hash:      document.Hash.String(),
-		Timestamp: document.Timestamp.UnixNano(),
+		Timestamp: model.MarshalDocumentTime(document.Timestamp),
 		Type:      document.Type,
 	})
 }

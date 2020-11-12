@@ -36,6 +36,9 @@ type protocol struct {
 	receivedDocumentHashes    *chanPeerHashQueue
 	peerHashes                map[model.PeerID]model.Hash
 
+	// documentIgnoreList contains hashes of documents that are invalid and shouldn't be retrieved from peers.
+	documentIgnoreList 		  map[model.Hash]bool
+
 	// Cache statistics to avoid having to lock precious resources
 	peerConsistencyHashStatistic peerConsistencyHashStatistic
 	newPeerHashChannel           chan PeerHash
@@ -54,7 +57,7 @@ func NewProtocol() Protocol {
 
 		peerHashes:         make(map[model.PeerID]model.Hash),
 		newPeerHashChannel: make(chan PeerHash, 100),
-
+		documentIgnoreList: make(map[model.Hash]bool, 0),
 		peerConsistencyHashStatistic: newPeerConsistencyHashStatistic(),
 	}
 	return p
