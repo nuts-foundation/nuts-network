@@ -85,6 +85,8 @@ github.com/deepmap/oapi-codegen v1.3.11 h1:Nd3tDQfqgquLmCzyRONHzs5SJEwPPoQcFZxT8
 github.com/deepmap/oapi-codegen v1.3.11/go.mod h1:suMvK7+rKlx3+tpa8ByptmvoXbAV70wERKTOGH3hLp0=
 github.com/deepmap/oapi-codegen v1.3.13 h1:9HKGCsdJqE4dnrQ8VerFS0/1ZOJPmAhN+g8xgp8y3K4=
 github.com/deepmap/oapi-codegen v1.3.13/go.mod h1:WAmG5dWY8/PYHt4vKxlt90NsbHMAOCiteYKZMiIRfOo=
+github.com/deepmap/oapi-codegen v1.4.1 h1:GAsp9N5SLYhQTKo+G4iZAJYzHBySpMh3ZP7Lml9aXj0=
+github.com/deepmap/oapi-codegen v1.4.1/go.mod h1:1jY0YDxfBF3tXk1u3sARJMSUJa9wV0UrVT6o+2mr/zQ=
 github.com/denisenkom/go-mssqldb v0.0.0-20190515213511-eb9f6a1743f3/go.mod h1:zAg7JM8CkOJ43xKXIj7eRO9kmWm/TW578qo+oDO6tuM=
 github.com/denisenkom/go-mssqldb v0.0.0-20191124224453-732737034ffd/go.mod h1:xbL0rPBG9cCiLr28tMa8zpbdarY27NDyej4t/EjAShU=
 github.com/dgrijalva/jwt-go v3.2.0+incompatible h1:7qlOGliEKZXTDg6OTjfoBKDXWrumCAMpl/TFQ4/5kLM=
@@ -114,6 +116,7 @@ github.com/getkin/kin-openapi v0.2.0/go.mod h1:V1z9xl9oF5Wt7v32ne4FmiF1alpS4dM6m
 github.com/getkin/kin-openapi v0.3.0/go.mod h1:W8dhxZgpE84ciM+VIItFqkmZ4eHtuomrdIHtASQIqi0=
 github.com/getkin/kin-openapi v0.13.0/go.mod h1:WGRs2ZMM1Q8LR1QBEwUxC6RJEfaBcD0s+pcEVXFuAjw=
 github.com/getkin/kin-openapi v0.22.0/go.mod h1:WGRs2ZMM1Q8LR1QBEwUxC6RJEfaBcD0s+pcEVXFuAjw=
+github.com/getkin/kin-openapi v0.26.0/go.mod h1:WGRs2ZMM1Q8LR1QBEwUxC6RJEfaBcD0s+pcEVXFuAjw=
 github.com/ghodss/yaml v1.0.0/go.mod h1:4dBDuWmgqj2HViK6kFavaiC9ZROes6MMH2rRYeMEF04=
 github.com/gibson042/canonicaljson-go v1.0.3/go.mod h1:DsLpJTThXyGNO+KZlI85C1/KDcImpP67k/RKVjcaEqo=
 github.com/go-chi/chi v4.0.2+incompatible/go.mod h1:eB3wogJHnLi3x/kFX2A+IbTBlXxmMeXJVKy9tTv1XzQ=
@@ -376,6 +379,8 @@ github.com/nuts-foundation/nuts-crypto v0.15.1-0.20200930071817-15a036b97663 h1:
 github.com/nuts-foundation/nuts-crypto v0.15.1-0.20200930071817-15a036b97663/go.mod h1:d0W4unhrJVpeObzjOq5IV7RlhwKEC2fwY9yvE8JYnWQ=
 github.com/nuts-foundation/nuts-crypto v0.15.1-0.20201015073554-cbeeb24605c8 h1:RVtcvBk+IY6z6/vKmjCozef6C1kJob9KebEyCXkDpNs=
 github.com/nuts-foundation/nuts-crypto v0.15.1-0.20201015073554-cbeeb24605c8/go.mod h1:GnZN/7zk0DeTjKCakLuGjSjW34PUK//dog1L5TiqRIc=
+github.com/nuts-foundation/nuts-crypto v0.15.1-0.20201113103650-0107d387c2e2 h1:rZubaeFJPk+teupUd8I2FaDJz358FhSMWlwXBBR5DK8=
+github.com/nuts-foundation/nuts-crypto v0.15.1-0.20201113103650-0107d387c2e2/go.mod h1:bEBVzeOoutY8M4NaDIGfrYWDXN3TAY1rdDVr1u58E+8=
 github.com/nuts-foundation/nuts-go-core v0.13.0/go.mod h1:YVG736ZUyC0nHRozNUsbLPRnxQouCzoARpswWgPV55g=
 github.com/nuts-foundation/nuts-go-core v0.13.1-0.20200422143012-856bc0bf2098/go.mod h1:UMfANk1YRb+7p5GFLexfHIVCXxgSOE+wLGU6gjR6uv4=
 github.com/nuts-foundation/nuts-go-core v0.13.1-0.20200422145233-a9d171e8b054 h1:ZNYy4xJgkNwBSk7nHzPsaEumQvV5wBSXNqk11NgQsko=

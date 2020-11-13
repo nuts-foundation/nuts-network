@@ -3,8 +3,7 @@ module github.com/nuts-foundation/nuts-network
 go 1.14
 
 require (
-	github.com/deepmap/oapi-codegen v1.3.13
-	github.com/getkin/kin-openapi v0.22.0 // indirect
+	github.com/deepmap/oapi-codegen v1.4.1
 	github.com/golang-migrate/migrate/v4 v4.11.0
 	github.com/golang/mock v1.4.4
 	github.com/golang/protobuf v1.4.2
@@ -15,7 +14,7 @@ require (
 	github.com/labstack/echo/v4 v4.1.17
 	github.com/lestrrat-go/jwx v1.0.5
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible
-	github.com/nuts-foundation/nuts-crypto v0.15.1-0.20201015073554-cbeeb24605c8
+	github.com/nuts-foundation/nuts-crypto v0.15.1-0.20201113103650-0107d387c2e2
 	github.com/nuts-foundation/nuts-go-core v0.15.0
 	github.com/nuts-foundation/nuts-go-test v0.15.0
 	github.com/pkg/errors v0.9.1

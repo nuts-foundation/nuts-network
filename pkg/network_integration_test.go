@@ -153,7 +153,7 @@ func startNode(name string, identity string, directory string) (*Network, error)
 	// Initialize crypto instance
 	cryptoInstance := crypto.CryptoInstance()
 	cryptoInstance.Config = crypto.CryptoConfig{
-		Keysize: crypto.MinKeySize,
+		Keysize: crypto.MinRSAKeySize,
 		Fspath:  directory,
 	}
 	logrus.SetLevel(logrus.DebugLevel)
