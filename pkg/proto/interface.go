@@ -83,6 +83,8 @@ type HashSource interface {
 	GetDocument(hash model.Hash) (*model.DocumentDescriptor, error)
 	// GetDocumentContents retrieves the contents of the document given the specified hash. If the document is not known or we don't have its contents, ErrMissingDocumentContents is returned.
 	GetDocumentContents(hash model.Hash) (io.ReadCloser, error)
+	// FindByContentHash searches for documents which contents match the given SHA-1 hash.
+	FindByContentHash(hash model.Hash) ([]model.DocumentDescriptor, error)
 	// AddDocumentWithContents adds a document including contents.
 	AddDocumentWithContents(timestamp time.Time, documentType string, contents io.Reader) (*model.Document, error)
 	// AddDocumentContents adds a contents to an already known document.

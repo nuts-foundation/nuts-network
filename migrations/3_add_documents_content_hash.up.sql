@@ -1,0 +1,1 @@
+ALTER TABLE document ADD contents_hash CHAR(40);

@@ -24,6 +24,7 @@ import (
 	"errors"
 	log "github.com/nuts-foundation/nuts-network/logging"
 	"github.com/nuts-foundation/nuts-network/pkg/documentlog"
+	"github.com/nuts-foundation/nuts-network/pkg/documentlog/store"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"github.com/nuts-foundation/nuts-network/pkg/p2p"
 	"time"
@@ -53,18 +54,29 @@ func (n *nodeList) Configure(nodeID model.NodeID, address string) error {
 }
 
 func (n *nodeList) Start() {
-	// TODO: Test if already registered by examining local copy to avoid creating waste (duplicate documents) on the network.
-	//  If not in the local copy, we should not autoregister our node but this should be done via a command.
-	//  This process can be made easier by registering our node info when `registry register-vendor` is executed.
 	if n.localNode.Address != "" {
-		log.Log().Infof("Registering local node on nodelist: %s", n.localNode)
-		data, _ := json.Marshal(n.localNode)
-		if _, err := n.documentLog.AddDocumentWithContents(time.Now(), nodeInfoDocumentType, bytes.NewReader(data)); err != nil {
-			// TODO: Shouldn't this be blocking?
-			log.Log().Errorf("Error while adding document with contents: %v", err)
+		if err := n.register(); err != nil {
+			log.Log().Errorf("Error while registering node: %v", err)
 		}
 	}
 	go n.consumeNodeInfoFromQueue(n.documentLog.Subscribe(nodeInfoDocumentType))
+}
+
+// register registers this node's public address (node info) on the global node list, so other nodes can connect to this node.
+// It only does so if the node info is not already present on the network to avoid producing duplicate data.
+func (n *nodeList) register() error {
+	data, _ := json.Marshal(n.localNode)
+	if existingRegistrations, err := n.documentLog.FindByContentHash(store.HashContents(data)); err != nil {
+		return err
+	} else if len(existingRegistrations) == 0 {
+		log.Log().Infof("Registering local node on nodelist: %s", n.localNode)
+		if _, err := n.documentLog.AddDocumentWithContents(time.Now(), nodeInfoDocumentType, bytes.NewReader(data)); err != nil {
+			return err
+		}
+	} else {
+		log.Log().Info("Not registering local node on nodelist since node info is already present.")
+	}
+	return nil
 }
 
 func (n *nodeList) consumeNodeInfoFromQueue(queue documentlog.DocumentQueue) {

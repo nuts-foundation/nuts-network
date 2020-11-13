@@ -37,6 +37,20 @@ func (m *MockDocumentLog) EXPECT() *MockDocumentLogMockRecorder {
 	return m.recorder
 }
 
+// Subscribe mocks base method
+func (m *MockDocumentLog) Subscribe(documentType string) DocumentQueue {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Subscribe", documentType)
+	ret0, _ := ret[0].(DocumentQueue)
+	return ret0
+}
+
+// Subscribe indicates an expected call of Subscribe
+func (mr *MockDocumentLogMockRecorder) Subscribe(documentType interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Subscribe", reflect.TypeOf((*MockDocumentLog)(nil).Subscribe), documentType)
+}
+
 // Documents mocks base method
 func (m *MockDocumentLog) Documents() ([]model.DocumentDescriptor, error) {
 	m.ctrl.T.Helper()
@@ -109,6 +123,21 @@ func (m *MockDocumentLog) GetDocumentContents(hash model.Hash) (io.ReadCloser, e
 func (mr *MockDocumentLogMockRecorder) GetDocumentContents(hash interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDocumentContents", reflect.TypeOf((*MockDocumentLog)(nil).GetDocumentContents), hash)
+}
+
+// FindByContentHash mocks base method
+func (m *MockDocumentLog) FindByContentHash(hash model.Hash) ([]model.DocumentDescriptor, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindByContentHash", hash)
+	ret0, _ := ret[0].([]model.DocumentDescriptor)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindByContentHash indicates an expected call of FindByContentHash
+func (mr *MockDocumentLogMockRecorder) FindByContentHash(hash interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByContentHash", reflect.TypeOf((*MockDocumentLog)(nil).FindByContentHash), hash)
 }
 
 // AddDocumentWithContents mocks base method
@@ -191,8 +220,31 @@ func (mr *MockDocumentLogMockRecorder) Stop() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Stop", reflect.TypeOf((*MockDocumentLog)(nil).Stop))
 }
 
+// MockPublisher is a mock of Publisher interface
+type MockPublisher struct {
+	ctrl     *gomock.Controller
+	recorder *MockPublisherMockRecorder
+}
+
+// MockPublisherMockRecorder is the mock recorder for MockPublisher
+type MockPublisherMockRecorder struct {
+	mock *MockPublisher
+}
+
+// NewMockPublisher creates a new mock instance
+func NewMockPublisher(ctrl *gomock.Controller) *MockPublisher {
+	mock := &MockPublisher{ctrl: ctrl}
+	mock.recorder = &MockPublisherMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use
+func (m *MockPublisher) EXPECT() *MockPublisherMockRecorder {
+	return m.recorder
+}
+
 // Subscribe mocks base method
-func (m *MockDocumentLog) Subscribe(documentType string) DocumentQueue {
+func (m *MockPublisher) Subscribe(documentType string) DocumentQueue {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Subscribe", documentType)
 	ret0, _ := ret[0].(DocumentQueue)
@@ -200,9 +252,9 @@ func (m *MockDocumentLog) Subscribe(documentType string) DocumentQueue {
 }
 
 // Subscribe indicates an expected call of Subscribe
-func (mr *MockDocumentLogMockRecorder) Subscribe(documentType interface{}) *gomock.Call {
+func (mr *MockPublisherMockRecorder) Subscribe(documentType interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Subscribe", reflect.TypeOf((*MockDocumentLog)(nil).Subscribe), documentType)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Subscribe", reflect.TypeOf((*MockPublisher)(nil).Subscribe), documentType)
 }
 
 // MockDocumentQueue is a mock of DocumentQueue interface
