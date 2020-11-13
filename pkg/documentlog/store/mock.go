@@ -64,19 +64,19 @@ func (mr *MockDocumentStoreMockRecorder) GetByConsistencyHash(hash interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByConsistencyHash", reflect.TypeOf((*MockDocumentStore)(nil).GetByConsistencyHash), hash)
 }
 
-// FindByContentHash mocks base method
-func (m *MockDocumentStore) FindByContentHash(hash model.Hash) ([]model.DocumentDescriptor, error) {
+// FindByContentsHash mocks base method
+func (m *MockDocumentStore) FindByContentsHash(hash model.Hash) ([]model.DocumentDescriptor, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindByContentHash", hash)
+	ret := m.ctrl.Call(m, "FindByContentsHash", hash)
 	ret0, _ := ret[0].([]model.DocumentDescriptor)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// FindByContentHash indicates an expected call of FindByContentHash
-func (mr *MockDocumentStoreMockRecorder) FindByContentHash(hash interface{}) *gomock.Call {
+// FindByContentsHash indicates an expected call of FindByContentsHash
+func (mr *MockDocumentStoreMockRecorder) FindByContentsHash(hash interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByContentHash", reflect.TypeOf((*MockDocumentStore)(nil).FindByContentHash), hash)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByContentsHash", reflect.TypeOf((*MockDocumentStore)(nil).FindByContentsHash), hash)
 }
 
 // Add mocks base method

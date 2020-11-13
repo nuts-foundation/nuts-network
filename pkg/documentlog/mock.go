@@ -125,19 +125,19 @@ func (mr *MockDocumentLogMockRecorder) GetDocumentContents(hash interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDocumentContents", reflect.TypeOf((*MockDocumentLog)(nil).GetDocumentContents), hash)
 }
 
-// FindByContentHash mocks base method
-func (m *MockDocumentLog) FindByContentHash(hash model.Hash) ([]model.DocumentDescriptor, error) {
+// FindByContentsHash mocks base method
+func (m *MockDocumentLog) FindByContentsHash(hash model.Hash) ([]model.DocumentDescriptor, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FindByContentHash", hash)
+	ret := m.ctrl.Call(m, "FindByContentsHash", hash)
 	ret0, _ := ret[0].([]model.DocumentDescriptor)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// FindByContentHash indicates an expected call of FindByContentHash
-func (mr *MockDocumentLogMockRecorder) FindByContentHash(hash interface{}) *gomock.Call {
+// FindByContentsHash indicates an expected call of FindByContentsHash
+func (mr *MockDocumentLogMockRecorder) FindByContentsHash(hash interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByContentHash", reflect.TypeOf((*MockDocumentLog)(nil).FindByContentHash), hash)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindByContentsHash", reflect.TypeOf((*MockDocumentLog)(nil).FindByContentsHash), hash)
 }
 
 // AddDocumentWithContents mocks base method

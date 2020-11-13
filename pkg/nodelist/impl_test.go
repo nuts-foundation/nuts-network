@@ -29,7 +29,7 @@ func Test_nodeList_register(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		documentLog := documentlog.NewMockDocumentLog(ctrl)
-		documentLog.EXPECT().FindByContentHash(gomock.Any())
+		documentLog.EXPECT().FindByContentsHash(gomock.Any())
 		documentLog.EXPECT().AddDocumentWithContents(gomock.Any(), nodeInfoDocumentType, gomock.Any())
 		p2pNetwork := p2p.NewMockP2PNetwork(ctrl)
 
@@ -44,7 +44,7 @@ func Test_nodeList_register(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		documentLog := documentlog.NewMockDocumentLog(ctrl)
-		documentLog.EXPECT().FindByContentHash(gomock.Any()).Return([]model.DocumentDescriptor{{Document: model.Document{}}}, nil)
+		documentLog.EXPECT().FindByContentsHash(gomock.Any()).Return([]model.DocumentDescriptor{{Document: model.Document{}}}, nil)
 		p2pNetwork := p2p.NewMockP2PNetwork(ctrl)
 		nodeList := NewNodeList(documentLog, p2pNetwork).(*nodeList)
 		nodeList.Configure("foo", "localhost:5555")

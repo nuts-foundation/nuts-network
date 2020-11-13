@@ -66,7 +66,7 @@ func (n *nodeList) Start() {
 // It only does so if the node info is not already present on the network to avoid producing duplicate data.
 func (n *nodeList) register() error {
 	data, _ := json.Marshal(n.localNode)
-	if existingRegistrations, err := n.documentLog.FindByContentHash(store.HashContents(data)); err != nil {
+	if existingRegistrations, err := n.documentLog.FindByContentsHash(store.HashContents(data)); err != nil {
 		return err
 	} else if len(existingRegistrations) == 0 {
 		log.Log().Infof("Registering local node on nodelist: %s", n.localNode)

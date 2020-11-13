@@ -248,7 +248,7 @@ func Test_sqlDocumentStore_WriteAndReadContents(t *testing.T) {
 	})
 }
 
-func Test_sqlDocumentStore_updateContentHashes(t *testing.T) {
+func Test_sqlDocumentStore_updateContentsHashes(t *testing.T) {
 	docStore := new(sqlDocumentStore)
 	defer createDatabase(docStore)()
 	document := getDocument()
@@ -263,15 +263,15 @@ func Test_sqlDocumentStore_updateContentHashes(t *testing.T) {
 		return
 	}
 	// Verify we can't find the document via its content hash
-	actual, _ := docStore.FindByContentHash(contentsHash)
+	actual, _ := docStore.FindByContentsHash(contentsHash)
 	assert.Empty(t, actual)
 	// Now update missing content hashes
-	err := docStore.updateContentHashes()
+	err := docStore.updateContentsHashes()
 	if !assert.NoError(t, err) {
 		return
 	}
 	// Assert we can find the document via its content hash
-	actual, _ = docStore.FindByContentHash(contentsHash)
+	actual, _ = docStore.FindByContentsHash(contentsHash)
 	assert.Len(t, actual, 1)
 }
 
@@ -279,7 +279,7 @@ func Test_sqlDocumentStore_FindByContentsHash(t *testing.T) {
 	docStore := new(sqlDocumentStore)
 	t.Run("ok - no results", func(t *testing.T) {
 		defer createDatabase(docStore)()
-		documents, err := docStore.FindByContentHash(sha1.Sum([]byte("test")))
+		documents, err := docStore.FindByContentsHash(sha1.Sum([]byte("test")))
 		if !assert.NoError(t, err) {
 			return
 		}
@@ -290,7 +290,7 @@ func Test_sqlDocumentStore_FindByContentsHash(t *testing.T) {
 		expected := getDocument()
 		docStore.Add(expected)
 		err := docStore.WriteContents(expected.Hash, bytes.NewReader(documentContents))
-		documents, err := docStore.FindByContentHash(contentsHash)
+		documents, err := docStore.FindByContentsHash(contentsHash)
 		if !assert.NoError(t, err) {
 			return
 		}
@@ -305,15 +305,15 @@ func Test_sqlDocumentStore_FindByContentsHash(t *testing.T) {
 		expected2 := getDocument()
 		docStore.Add(expected2)
 		docStore.WriteContents(expected2.Hash, bytes.NewReader(documentContents))
-		otherContent := getDocument()
-		otherContent.Hash = model.CalculateDocumentHash(otherContent.Type, otherContent.Timestamp, []byte("otherContent"))
-		docStore.Add(otherContent)
-		docStore.WriteContents(otherContent.Hash, bytes.NewReader([]byte("otherContent")))
+		otherContents := getDocument()
+		otherContents.Hash = model.CalculateDocumentHash(otherContents.Type, otherContents.Timestamp, []byte("otherContents"))
+		docStore.Add(otherContents)
+		docStore.WriteContents(otherContents.Hash, bytes.NewReader([]byte("otherContents")))
 		noContent := getDocument()
 		noContent.Hash = model.CalculateDocumentHash(noContent.Type, noContent.Timestamp, []byte("doc2"))
 		docStore.Add(noContent)
 
-		documents, err := docStore.FindByContentHash(contentsHash)
+		documents, err := docStore.FindByContentsHash(contentsHash)
 		if !assert.NoError(t, err) {
 			return
 		}

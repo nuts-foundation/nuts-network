@@ -70,8 +70,8 @@ func newSQLDocumentStore(db *gorm.DB) (DocumentStore, error) {
 	if err := docStore.migrate(); err != nil {
 		return nil, err
 	}
-	// Since the content hash column was added later, make sure it's populated
-	if err := docStore.updateContentHashes(); err != nil {
+	// Since the contents hash column was added later, make sure it's populated
+	if err := docStore.updateContentsHashes(); err != nil {
 		return nil, errors2.Wrap(err, "error while updating content hashes")
 	}
 	return docStore, nil
@@ -201,7 +201,7 @@ func (s sqlDocumentStore) GetByConsistencyHash(hash model.Hash) (*model.Document
 	return s.get("consistency_hash = ?", hash.String())
 }
 
-func (s sqlDocumentStore) FindByContentHash(hash model.Hash) ([]model.DocumentDescriptor, error) {
+func (s sqlDocumentStore) FindByContentsHash(hash model.Hash) ([]model.DocumentDescriptor, error) {
 	s.sqliteMutex.Lock()
 	defer s.sqliteMutex.Unlock()
 	documents := make([]sqlDocument, 0)
@@ -377,8 +377,8 @@ func (s sqlDocumentStore) migrate() error {
 	return nil
 }
 
-// updateContentHashes finds documents where contents_hash is missing (since it was added later on) and updates it where needed.
-func (s sqlDocumentStore) updateContentHashes() error {
+// updateContentsHashes finds documents where contents_hash is missing (since it was added later on) and updates it where needed.
+func (s sqlDocumentStore) updateContentsHashes() error {
 	hashes := make([]string, 0)
 	err := s.db.
 		Table(documentTable).
