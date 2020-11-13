@@ -227,10 +227,11 @@ func (n *p2pNetwork) Start() error {
 			if n.config.ServerCert.PrivateKey == nil {
 				log.Log().Info("TLS is disabled on gRPC server side! Make sure SSL/TLS offloading is properly configured.")
 			} else {
+				_, rootPool := n.config.TrustStore.Roots()
 				serverOpts = append(serverOpts, grpc.Creds(credentials.NewTLS(&tls.Config{
 					Certificates: []tls.Certificate{n.config.ServerCert},
 					ClientAuth:   tls.RequireAndVerifyClientCert,
-					ClientCAs:    n.config.TrustStore.Pool(),
+					ClientCAs:    rootPool,
 				})))
 			}
 		}
