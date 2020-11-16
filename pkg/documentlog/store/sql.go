@@ -20,6 +20,7 @@ package store
 
 import (
 	"bytes"
+	"crypto/sha1"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -69,11 +70,15 @@ func newSQLDocumentStore(db *gorm.DB) (DocumentStore, error) {
 	if err := docStore.migrate(); err != nil {
 		return nil, err
 	}
+	// Since the contents hash column was added later, make sure it's populated
+	if err := docStore.updateContentsHashes(); err != nil {
+		return nil, errors2.Wrap(err, "error while updating content hashes")
+	}
 	return docStore, nil
 }
 
 type sqlDocumentStore struct {
-	db          *gorm.DB
+	db *gorm.DB
 	// sqliteMutex is ONLY required for sqlite, so when switching to another database system this should probably be removed!
 	sqliteMutex *sync.Mutex
 }
@@ -196,6 +201,25 @@ func (s sqlDocumentStore) GetByConsistencyHash(hash model.Hash) (*model.Document
 	return s.get("consistency_hash = ?", hash.String())
 }
 
+func (s sqlDocumentStore) FindByContentsHash(hash model.Hash) ([]model.DocumentDescriptor, error) {
+	s.sqliteMutex.Lock()
+	defer s.sqliteMutex.Unlock()
+	documents := make([]sqlDocument, 0)
+	err := s.db.
+		Table(documentTable).
+		Select(documentSelectCols).
+		Find(&documents, "contents_hash = ?", hash.String()).
+		Error
+	if err != nil {
+		return nil, err
+	}
+	result := make([]model.DocumentDescriptor, len(documents))
+	for i, document := range documents {
+		result[i] = document.descriptor()
+	}
+	return result, nil
+}
+
 func (s sqlDocumentStore) GetAll() ([]model.DocumentDescriptor, error) {
 	s.sqliteMutex.Lock()
 	defer s.sqliteMutex.Unlock()
@@ -220,7 +244,9 @@ func (s sqlDocumentStore) WriteContents(hash model.Hash, contents io.Reader) err
 	}
 	s.sqliteMutex.Lock()
 	defer s.sqliteMutex.Unlock()
-	query := s.db.Table(documentTable).Where("hash = ?", hash.String()).UpdateColumn("contents", buf.Bytes())
+	query := s.db.Table(documentTable).
+		Where("hash = ?", hash.String()).
+		UpdateColumns(map[string]interface{}{"contents": buf.Bytes(), "contents_hash": HashContents(buf.Bytes()).String()})
 	if query.Error != nil {
 		return query.Error
 	}
@@ -349,6 +375,50 @@ func (s sqlDocumentStore) migrate() error {
 		return err
 	}
 	return nil
+}
+
+// updateContentsHashes finds documents where contents_hash is missing (since it was added later on) and updates it where needed.
+func (s sqlDocumentStore) updateContentsHashes() error {
+	hashes := make([]string, 0)
+	err := s.db.
+		Table(documentTable).
+		Select("hash").
+		Where("contents IS NOT NULL AND contents_hash IS NULL").
+		Pluck("hash", &hashes).
+		Error
+	if err != nil {
+		return errors2.Wrap(err, "error while looking for contents hashes to update")
+	}
+	if len(hashes) > 0 {
+		logging.Log().Infof("Updating %d missing content hashes...", len(hashes))
+		for _, hashAsString := range hashes {
+			hash, err := model.ParseHash(hashAsString)
+			if err != nil {
+				return err
+			}
+			contents, err := s.ReadContents(hash)
+			if err != nil {
+				return err
+			}
+			buf := new(bytes.Buffer)
+			if _, err = buf.ReadFrom(contents); err != nil {
+				return err
+			}
+			contentsHash := HashContents(buf.Bytes())
+			query := s.db.Table(documentTable).Where("hash = ?", hash.String()).UpdateColumn("contents_hash", contentsHash.String())
+			if query.Error != nil {
+				return query.Error
+			}
+			if query.RowsAffected == 0 {
+				return fmt.Errorf("document not found: %s", hash)
+			}
+		}
+	}
+	return nil
+}
+
+func HashContents(contents []byte) model.Hash {
+	return sha1.Sum(contents)
 }
 
 // NoopCloser implements io.ReadCloser with a No-Operation, intended for returning byte slices.

@@ -20,6 +20,7 @@ package store
 
 import (
 	"bytes"
+	"crypto/sha1"
 	"fmt"
 	logging "github.com/nuts-foundation/nuts-network/logging"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
@@ -32,6 +33,7 @@ import (
 )
 
 var documentContents = []byte("foobar")
+var contentsHash = sha1.Sum(documentContents)
 
 func Test_sqlDocumentStore_AddAndGet(t *testing.T) {
 	docStore := new(sqlDocumentStore)
@@ -64,7 +66,7 @@ func Test_sqlDocumentStore_AddAndGet(t *testing.T) {
 		for x := 0; x < goRoutines/2; x++ {
 			fn := func(num int, contents string) {
 				for i := 0; i < docsPerGoroutine; i++ {
-					ts := int64(num * 1000 + i * 10)
+					ts := int64(num*1000 + i*10)
 					_, err := docStore.Add(model.Document{
 						Hash:      toHash(fmt.Sprintf("%s%038d", contents, ts)),
 						Type:      "doc",
@@ -243,6 +245,79 @@ func Test_sqlDocumentStore_WriteAndReadContents(t *testing.T) {
 			return
 		}
 		assert.Equal(t, documentContents, buf.Bytes())
+	})
+}
+
+func Test_sqlDocumentStore_updateContentsHashes(t *testing.T) {
+	docStore := new(sqlDocumentStore)
+	defer createDatabase(docStore)()
+	document := getDocument()
+	docStore.Add(document)
+	docStore.WriteContents(document.Hash, bytes.NewReader(documentContents))
+	// Simulate old record without contents_hash
+	result := docStore.db.Exec("UPDATE document SET contents_hash = NULL")
+	if !assert.NoError(t, result.Error) {
+		return
+	}
+	if !assert.Equal(t, int64(1), result.RowsAffected) {
+		return
+	}
+	// Verify we can't find the document via its content hash
+	actual, _ := docStore.FindByContentsHash(contentsHash)
+	assert.Empty(t, actual)
+	// Now update missing content hashes
+	err := docStore.updateContentsHashes()
+	if !assert.NoError(t, err) {
+		return
+	}
+	// Assert we can find the document via its content hash
+	actual, _ = docStore.FindByContentsHash(contentsHash)
+	assert.Len(t, actual, 1)
+}
+
+func Test_sqlDocumentStore_FindByContentsHash(t *testing.T) {
+	docStore := new(sqlDocumentStore)
+	t.Run("ok - no results", func(t *testing.T) {
+		defer createDatabase(docStore)()
+		documents, err := docStore.FindByContentsHash(sha1.Sum([]byte("test")))
+		if !assert.NoError(t, err) {
+			return
+		}
+		assert.Empty(t, documents)
+	})
+	t.Run("ok - 1 result", func(t *testing.T) {
+		defer createDatabase(docStore)()
+		expected := getDocument()
+		docStore.Add(expected)
+		err := docStore.WriteContents(expected.Hash, bytes.NewReader(documentContents))
+		documents, err := docStore.FindByContentsHash(contentsHash)
+		if !assert.NoError(t, err) {
+			return
+		}
+		assert.Len(t, documents, 1)
+	})
+	t.Run("ok - 2 results", func(t *testing.T) {
+		defer createDatabase(docStore)()
+		// Add 4 documents to the store: 2 with matching contents, 1 with different content and 1 without.
+		expected1 := getDocument()
+		docStore.Add(expected1)
+		docStore.WriteContents(expected1.Hash, bytes.NewReader(documentContents))
+		expected2 := getDocument()
+		docStore.Add(expected2)
+		docStore.WriteContents(expected2.Hash, bytes.NewReader(documentContents))
+		otherContents := getDocument()
+		otherContents.Hash = model.CalculateDocumentHash(otherContents.Type, otherContents.Timestamp, []byte("otherContents"))
+		docStore.Add(otherContents)
+		docStore.WriteContents(otherContents.Hash, bytes.NewReader([]byte("otherContents")))
+		noContent := getDocument()
+		noContent.Hash = model.CalculateDocumentHash(noContent.Type, noContent.Timestamp, []byte("doc2"))
+		docStore.Add(noContent)
+
+		documents, err := docStore.FindByContentsHash(contentsHash)
+		if !assert.NoError(t, err) {
+			return
+		}
+		assert.Len(t, documents, 2)
 	})
 }
 

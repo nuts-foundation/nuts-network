@@ -29,6 +29,8 @@ type DocumentStore interface {
 	Get(hash model.Hash) (*model.DocumentDescriptor, error)
 	// GetByConsistencyHash retrieves a document from the store given its consistency hash. If it doesn't exist, nil is returned (no error).
 	GetByConsistencyHash(hash model.Hash) (*model.DocumentDescriptor, error)
+	// FindByContentsHash searches for documents which contents match the given SHA-1 hash.
+	FindByContentsHash(hash model.Hash) ([]model.DocumentDescriptor, error)
 	// Add adds a document, returning the last consistency hash.
 	Add(document model.Document) (model.Hash, error)
 	// GetAll retrieves all documents.

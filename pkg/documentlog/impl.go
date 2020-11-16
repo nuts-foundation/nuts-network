@@ -102,6 +102,11 @@ func (dl documentLog) GetDocumentContents(hash model.Hash) (io.ReadCloser, error
 	return contents, err
 }
 
+// FindByContentsHash searches for documents which contents match the given SHA-1 hash.
+func (dl documentLog) FindByContentsHash(hash model.Hash) ([]model.DocumentDescriptor, error) {
+	return dl.store.FindByContentsHash(hash)
+}
+
 func (dl *documentLog) AddDocument(document model.Document) error {
 	return dl.addDocument(document)
 }
