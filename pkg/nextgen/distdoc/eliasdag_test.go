@@ -2,9 +2,7 @@ package distdoc
 
 import (
 	testIO "github.com/nuts-foundation/nuts-go-test/io"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"io"
 	"testing"
 )
 
@@ -66,13 +64,16 @@ var eliasDBDAGCreator = func(creator func() (DAG, error), t *testing.T) DAG {
 	if err != nil {
 		t.Fatal("Failed to create EliasDB DAG", err)
 	}
-	t.Cleanup(func() {
-		if closer, ok := dag.(io.Closer); ok {
-			if err := closer.Close(); err != nil {
-				logrus.Error("Unable to close DAG:", err)
-			}
-		}
-	})
+	// Closing the DAG causes a race condition, which fails the build. Bug is reported to library author:
+	// https://github.com/krotik/eliasdb/issues/27
+	// Should be enabled again after it's fixed.
+	//t.Cleanup(func() {
+	//	if closer, ok := dag.(io.Closer); ok {
+	//		if err := closer.Close(); err != nil {
+	//			logrus.Error("Unable to close DAG:", err)
+	//		}
+	//	}
+	//})
 	return dag
 }
 
