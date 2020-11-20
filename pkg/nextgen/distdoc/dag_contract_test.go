@@ -165,8 +165,9 @@ func DAGTest_Walk(creator func(t *testing.T) DAG, t *testing.T) {
 
 		graph.Walk(visitor.Accept)
 
+		// Assert the second root document wasn't added
 		assert.Len(t, visitor.documents, 1)
-		assert.Equal(t, d1, visitor.documents[0])
+		assert.Equal(t, d1.Ref(), visitor.documents[0].Ref())
 	})
 }
 
