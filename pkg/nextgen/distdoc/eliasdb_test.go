@@ -78,11 +78,17 @@ var eliasDBDAGCreator = func(creator func() (DAG, error), t *testing.T) DAG {
 }
 
 var inMemoryEliasDBDAGCreator = func(t *testing.T) DAG {
-	return eliasDBDAGCreator(NewMemoryEliasDBDAG, t)
+	return eliasDBDAGCreator(func() (DAG, error) {
+		return NewEliasDBDAG(NewMemoryEliasDB().Manager), nil
+	}, t)
 }
 
 var onDiskEliasDBDAGCreator = func(t *testing.T) DAG {
 	return eliasDBDAGCreator(func() (DAG, error) {
-		return NewDiskEliasDBDAG(testIO.TestDirectory(t))
+		if db, err := NewDiskEliasDB(testIO.TestDirectory(t)); err != nil {
+			return nil, err
+		} else {
+			return NewEliasDBDAG(db.Manager), nil
+		}
 	}, t)
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/nuts-foundation/nuts-network/logging"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -25,21 +26,23 @@ const resolvedAttr = "resolved"
 // rootAttr indicates the document is the DAGs root document. There can only be one document with this attribute being true.
 const rootAttr = "root"
 
-// documentAttrPrefix is the prefix for document properties when mapping them to EliasDB node attributes
-const documentAttrPrefix = "document"
 const (
-	documentPayloadTypeAttr     = documentAttrPrefix + ".typ"
-	documentPayloadAttr         = documentAttrPrefix + ".payload"
-	documentPreviousAttr        = documentAttrPrefix + ".prev"
-	documentVersionAttr         = documentAttrPrefix + ".ver"
-	documentTimelineIDAttr      = documentAttrPrefix + ".tid"
-	documentTimelineVersionAttr = documentAttrPrefix + ".tiv"
-	documentSigningTimeAttr     = documentAttrPrefix + ".time"
-	documentSigningCertAttr     = documentAttrPrefix + ".certificate"
-	documentDataAttr            = documentAttrPrefix + ".data"
+	// documentAttrPrefix is the prefix for document properties when mapping them to EliasDB node attributes
+	documentAttrPrefix          = "document"
+	documentPayloadTypeAttr     = "typ"
+	documentPayloadAttr         = "payload"
+	documentPreviousAttr        = "prev"
+	documentVersionAttr         = "ver"
+	documentTimelineIDAttr      = "tid"
+	documentTimelineVersionAttr = "tiv"
+	documentSigningTimeAttr     = "time"
+	documentSigningCertAttr     = "certificate"
+	documentDataAttr            = "data"
+	documentPayloadDataAttr     = "payloadData"
 )
 
 const errInvalidDocumentNode = "invalid document node in EliasDB: %s: %v"
+const errDocumentNodeNotFound = "document node in EliasDB not found: %s"
 
 func init() {
 	// Register custom gob types
@@ -51,8 +54,33 @@ func init() {
 }
 
 type eliasDBDAG struct {
-	storage graphstorage.Storage
-	manager *graph.Manager
+	storage    graphstorage.Storage
+	manager    *graph.Manager
+	projectors []Projector
+}
+
+func (e *eliasDBDAG) UpdateProjections(documentRef model.Hash) error {
+	node, err := e.manager.FetchNode(partition, documentRef.String(), documentKind)
+	if err != nil {
+		return err
+	} else if node == nil {
+		return fmt.Errorf(errDocumentNodeNotFound, documentRef)
+	}
+	document, err := nodeToDocument(node)
+	if err != nil {
+		return err
+	}
+	if err := e.applyProjectors(document, node); err != nil {
+		return fmt.Errorf("error while applying projectors for document %s: %w", documentRef, err)
+	}
+	if err := e.manager.StoreNode(partition, node); err != nil {
+		return fmt.Errorf("error while storing updated node %s: %v", documentRef, err)
+	}
+	return nil
+}
+
+func (e *eliasDBDAG) RegisterProjector(projector Projector) {
+	e.projectors = append(e.projectors, projector)
 }
 
 func (e eliasDBDAG) MissingDocuments() []model.Hash {
@@ -168,12 +196,37 @@ func (e eliasDBDAG) createNode(ref model.Hash) data.Node {
 	return node
 }
 
-func (e eliasDBDAG) createNodeFromDocument(document Document) data.Node {
+func (e *eliasDBDAG) createNodeFromDocument(document Document) data.Node {
 	node := e.createNode(document.Ref())
-	for key, value := range documentToMap(document) {
-		node.SetAttr(key, value)
-	}
+	_ = e.applyProjector(document, node, &documentProjector{})
 	return node
+}
+
+func (e eliasDBDAG) applyProjectors(document Document, node data.Node) error {
+	for _, projector := range e.projectors {
+		if err := e.applyProjector(document, node, projector); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (e eliasDBDAG) applyProjector(document Document, node data.Node, projector Projector) error {
+	projection, err := projector.Project(&e, document)
+	if err != nil {
+		return fmt.Errorf("projector returned an error: %v", err)
+	}
+	if projection == nil {
+		// This projection didn't project anything, which is fine.
+		return nil
+	}
+	if strings.TrimSpace(projection.Name) == "" {
+		return fmt.Errorf("projection has invalid name: %s", projection.Name)
+	}
+	for key, value := range projection.Properties {
+		node.SetAttr(fmt.Sprintf("%s.%s", projection.Name, key), value)
+	}
+	return nil
 }
 
 func (e eliasDBDAG) Walk(visitor Visitor) error {
@@ -250,23 +303,68 @@ func sortDocumentsOnHash(slice []Document) {
 	})
 }
 
-func NewDiskEliasDBDAG(directory string) (DAG, error) {
-	storage, err := graphstorage.NewDiskGraphStorage(directory, false)
-	if err != nil {
+type EliasDB struct {
+	Storage graphstorage.Storage
+	Manager *graph.Manager
+}
+
+func NewDiskEliasDB(directory string) (*EliasDB, error) {
+	if storage, err := graphstorage.NewDiskGraphStorage(directory, false); err != nil {
 		return nil, err
+	} else {
+		return &EliasDB{Storage: storage, Manager: graph.NewGraphManager(storage)}, nil
 	}
-	manager := graph.NewGraphManager(storage)
-	return &eliasDBDAG{storage: storage, manager: manager}, nil
 }
 
-func NewMemoryEliasDBDAG() (DAG, error) {
+func NewMemoryEliasDB() *EliasDB {
 	storage := graphstorage.NewMemoryGraphStorage("db")
-	manager := graph.NewGraphManager(storage)
-	return &eliasDBDAG{storage: storage, manager: manager}, nil
+	return &EliasDB{Storage: storage, Manager: graph.NewGraphManager(storage)}
 }
 
-func (e eliasDBDAG) Close() error {
-	return e.storage.Close()
+func (e EliasDB) Close() error {
+	return e.Storage.Close()
+}
+
+func NewEliasDBDAG(manager *graph.Manager) ProjectableDAG {
+	return &eliasDBDAG{
+		manager:    manager,
+		projectors: make([]Projector, 0),
+	}
+}
+
+type eliasDBPayloadStore struct {
+	manager *graph.Manager
+}
+
+func (e eliasDBPayloadStore) WritePayload(documentRef model.Hash, data []byte) error {
+	node, err := e.manager.FetchNode(partition, documentRef.String(), documentKind)
+	if err != nil {
+		return fmt.Errorf("unable to fetch node %s for storing payload: %w", documentRef, err)
+	}
+	if node == nil {
+		return fmt.Errorf(errDocumentNodeNotFound, documentRef)
+	}
+	node.SetAttr(documentPayloadDataAttr, data)
+	return e.manager.StoreNode(partition, node)
+}
+
+func (e eliasDBPayloadStore) ReadPayload(documentRef model.Hash) ([]byte, error) {
+	node, err := e.manager.FetchNodePart(partition, documentRef.String(), documentKind, []string{documentPayloadDataAttr})
+	if err != nil {
+		return nil, fmt.Errorf("unable to read payload of %s: %w", documentRef, err)
+	}
+	if node == nil {
+		return nil, fmt.Errorf(errDocumentNodeNotFound, documentRef)
+	}
+	if data, ok := node.Attr(documentPayloadDataAttr).([]byte); !ok {
+		return nil, nil
+	} else {
+		return data, nil
+	}
+}
+
+func NewEliasDBPayloadStore(manager *graph.Manager) PayloadStore {
+	return &eliasDBPayloadStore{manager: manager}
 }
 
 func nodeToDocument(node data.Node) (Document, error) {
@@ -278,47 +376,52 @@ func nodeToDocument(node data.Node) (Document, error) {
 	invalidValueWithErr := func(field string, err error) error {
 		return fmt.Errorf("invalid EliasDB document field: %s: %v", field, err)
 	}
+	attr := func(name string) interface{} {
+		return node.Attr(documentAttrPrefix + "." + name)
+	}
 	var ok bool
 	var err error
 
-	if result.payloadType, ok = node.Attr(documentPayloadTypeAttr).(string); !ok {
+	if result.payloadType, ok = attr(documentPayloadTypeAttr).(string); !ok {
 		return nil, invalidValue(documentPayloadTypeAttr)
 	}
-	if result.data, ok = node.Attr(documentDataAttr).([]byte); !ok {
+	if result.data, ok = attr(documentDataAttr).([]byte); !ok {
 		return nil, invalidValue(documentDataAttr)
 	}
-	if result.payload, ok = node.Attr(documentPayloadAttr).(model.Hash); !ok {
+	if result.payload, ok = attr(documentPayloadAttr).(model.Hash); !ok {
 		return nil, invalidValue(documentPayloadAttr)
 	}
-	if result.prevs, ok = node.Attr(documentPreviousAttr).([]model.Hash); !ok {
+	if result.prevs, ok = attr(documentPreviousAttr).([]model.Hash); !ok {
 		return nil, invalidValue(documentPreviousAttr)
 	}
 	if result.ref, err = model.ParseHash(node.Attr(data.NodeKey).(string)); err != nil {
 		return nil, invalidValue(data.NodeKey)
 	}
-	if result.version, ok = node.Attr(documentVersionAttr).(Version); !ok {
+	if result.version, ok = attr(documentVersionAttr).(Version); !ok {
 		return nil, invalidValue(documentVersionAttr)
 	}
-	if result.timelineID, ok = node.Attr(documentTimelineIDAttr).(model.Hash); !ok {
+	if result.timelineID, ok = attr(documentTimelineIDAttr).(model.Hash); !ok {
 		return nil, invalidValue(documentTimelineIDAttr)
 	}
-	if result.timelineVersion, ok = node.Attr(documentTimelineVersionAttr).(int); !ok {
+	if result.timelineVersion, ok = attr(documentTimelineVersionAttr).(int); !ok {
 		return nil, invalidValue(documentTimelineVersionAttr)
 	}
-	if signingCertAsBytes, ok := node.Attr(documentSigningCertAttr).([]byte); !ok {
+	if signingCertAsBytes, ok := attr(documentSigningCertAttr).([]byte); !ok {
 		return nil, invalidValue(documentSigningCertAttr)
 	} else if result.certificate, err = x509.ParseCertificate(signingCertAsBytes); err != nil {
 		return nil, invalidValueWithErr(documentSigningCertAttr, err)
 	}
-	if result.signingTime, ok = node.Attr(documentSigningTimeAttr).(time.Time); !ok {
+	if result.signingTime, ok = attr(documentSigningTimeAttr).(time.Time); !ok {
 		return nil, invalidValue(documentSigningTimeAttr)
 	}
 
 	return &result, nil
 }
 
-func documentToMap(document Document) map[string]interface{} {
-	result := map[string]interface{}{
+type documentProjector struct{}
+
+func (_ documentProjector) Project(dag ProjectableDAG, document Document) (*Projection, error) {
+	props := map[string]interface{}{
 		documentPayloadTypeAttr:     document.PayloadType(),
 		documentPayloadAttr:         model.Hash(document.Payload()),
 		documentPreviousAttr:        document.Previous(),
@@ -329,5 +432,8 @@ func documentToMap(document Document) map[string]interface{} {
 		documentSigningCertAttr:     document.SigningCertificate().Raw,
 		documentDataAttr:            document.Data(),
 	}
-	return result
+	return &Projection{
+		Name:       documentAttrPrefix,
+		Properties: props,
+	}, nil
 }
