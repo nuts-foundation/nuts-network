@@ -130,6 +130,9 @@ func (e eliasDBDAG) add(document Document) error {
 			return errRootAlreadyExists
 		}
 	}
+	if err := e.applyProjectors(document, node); err != nil {
+		log.Log().Warnf("error while applying projectors for document %s: %v", document.Ref(), err)
+	}
 	// Store node
 	if err := transaction.StoreNode(partition, node); err != nil {
 		return fmt.Errorf("unable to store node: %w", err)

@@ -157,9 +157,9 @@ func DAGTest_Walk(creator func(t *testing.T) DAG, t *testing.T) {
 		graph := creator(t)
 		d1 := testDocument(0)
 		d2 := testDocument(1)
-		err := graph.Add(d1)
+		_ = graph.Add(d1)
 
-		err = graph.Add(d2)
+		err := graph.Add(d2)
 		assert.Equal(t, errRootAlreadyExists, err)
 		visitor := trackingVisitor{}
 

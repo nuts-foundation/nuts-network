@@ -1,6 +1,7 @@
 package distdoc
 
 import (
+	"errors"
 	testIO "github.com/nuts-foundation/nuts-go-test/io"
 	"github.com/stretchr/testify/assert"
 	"testing"
@@ -28,6 +29,53 @@ func TestDiskEliasDBDAG_MissingDocuments(t *testing.T) {
 
 func TestDiskEliasDBDAG_Walk(t *testing.T) {
 	DAGTest_Walk(onDiskEliasDBDAGCreator, t)
+}
+
+
+type delegatingProjector struct {
+	f func(dag ProjectableDAG, document Document) (*Projection, error)
+}
+
+func (t delegatingProjector) Project(dag ProjectableDAG, document Document) (*Projection, error) {
+	return t.f(dag, document)
+}
+
+func TestEliasDBDAG_Projections(t *testing.T) {
+	t.Run("ok - assert is called", func(t *testing.T) {
+		dag := NewEliasDBDAG(NewMemoryEliasDB().Manager)
+		called := false
+		dag.RegisterProjector(&delegatingProjector{func(dag ProjectableDAG, document Document) (*Projection, error) {
+			called = true
+			return nil, nil
+		}})
+		err := dag.Add(testDocument(1))
+		assert.NoError(t, err)
+		assert.True(t, called)
+	})
+	t.Run("ok - error does not fail Add() operation", func(t *testing.T) {
+		dag := NewEliasDBDAG(NewMemoryEliasDB().Manager)
+		dag.RegisterProjector(&delegatingProjector{func(dag ProjectableDAG, document Document) (*Projection, error) {
+			return nil, errors.New("some error")
+		}})
+		err := dag.Add(testDocument(1))
+		assert.NoError(t, err)
+	})
+	t.Run("error - projection has empty name", func(t *testing.T) {
+		dag := NewEliasDBDAG(NewMemoryEliasDB().Manager)
+		dag.RegisterProjector(&delegatingProjector{func(dag ProjectableDAG, document Document) (*Projection, error) {
+			return &Projection{}, nil
+		}})
+		err := dag.Add(testDocument(1))
+		assert.NoError(t, err)
+	})
+	t.Run("ok - projection has no attributes", func(t *testing.T) {
+		dag := NewEliasDBDAG(NewMemoryEliasDB().Manager)
+		dag.RegisterProjector(&delegatingProjector{func(dag ProjectableDAG, document Document) (*Projection, error) {
+			return &Projection{Name: "test"}, nil
+		}})
+		err := dag.Add(testDocument(1))
+		assert.NoError(t, err)
+	})
 }
 
 func TestEliasDBDAG_StoreAndLoad(t *testing.T) {
