@@ -7,7 +7,7 @@ import (
 
 // DotGraphVisitor is a graph visitor that outputs the walked path as "dot" diagram.
 type DotGraphVisitor struct {
-	graph       *DAG
+	graph       *memoryDAG
 	output      string
 	aliases     map[string]string
 	counter     int
@@ -29,7 +29,7 @@ const (
 	ShowRefLabelStyle LabelStyle = iota
 )
 
-func NewDotGraphVisitor(graph *DAG, labelStyle LabelStyle) *DotGraphVisitor {
+func NewDotGraphVisitor(graph *memoryDAG, labelStyle LabelStyle) *DotGraphVisitor {
 	return &DotGraphVisitor{
 		graph:      graph,
 		aliases:    map[string]string{},
