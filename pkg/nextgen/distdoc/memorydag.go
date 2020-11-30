@@ -1,9 +1,7 @@
 package distdoc
 
 import (
-	"container/list"
 	"github.com/nuts-foundation/nuts-network/pkg/model"
-	"sort"
 )
 
 type memoryDAG struct {
@@ -45,6 +43,15 @@ func (c *memoryDAG) Add(documents ...Document) error {
 		}
 	}
 	return nil
+}
+
+
+func (c memoryDAG) Root() (model.Hash, error) {
+	if c.root == nil {
+		return model.EmptyHash(), nil
+	} else {
+		return c.root.document.Ref(), nil
+	}
 }
 
 func (c *memoryDAG) add(document Document) error {
@@ -89,66 +96,25 @@ func (c *memoryDAG) add(document Document) error {
 	return nil
 }
 
-func (c memoryDAG) Walk(visitor Visitor) error {
+func (c memoryDAG) Walk(walker Walker, visitor Visitor, startAt model.Hash) error {
 	if c.root == nil {
 		return nil
 	}
-	// The algorithm below is a Breadth-First-Search (BFS) as described by Anany Levitin in "The Design & Analysis of Algorithms".
-	// It visits the whole tree level for level (breadth first vs depth first). It works by taking a node from queue and
-	// then adds the node's children (downward edges) to the queue. It starts by adding the root node to the queue and
-	// loops over the queue until empty, meaning all nodes reachable from the root node have been visited. Since our
-	// DAG contains merges (two parents referring to the same child node) we also keep a map to avoid visiting a
-	// merger node twice.
-	//
-	// This also means we have to make sure we don't visit the merger node before all of its previous nodes have been
-	// visited, which BFS doesn't account for. If that happens we skip the node without marking it as visited,
-	// so it will be visited again when the unvisited previous node is visited, which re-adds the merger node to the queue.
-	queue := list.New()
-	queue.PushBack(c.root)
-	visitedNodes := make(map[*node]bool, len(c.nodes))
-	visitedDocuments := make(map[model.Hash]bool, len(c.nodes))
-ProcessQueueLoop:
-	for queue.Len() > 0 {
-		// Pop first element of queue
-		front := queue.Front()
-		queue.Remove(front)
-		currentNode := front.Value.(*node)
-
-		// Make sure we haven't already visited this node
-		if _, visited := visitedNodes[currentNode]; visited {
-			continue
+	return walker.walk(visitor, startAt, func(hash model.Hash) (Document, error) {
+		if node := c.nodes[hash]; node == nil {
+			return nil, nil
+		} else {
+			return node.document, nil
 		}
-
-		// Make sure all prevs have been visited. Otherwise just continue, it will be re-added to the queue when the
-		// unvisited prev node is visited and re-adds this node to the processing queue.
-		for _, prev := range currentNode.document.Previous() {
-			if _, visited := visitedDocuments[prev]; !visited {
-				continue ProcessQueueLoop
+	}, func(hash model.Hash) ([]model.Hash, error) {
+		if node := c.nodes[hash]; node == nil {
+			return nil, nil
+		} else {
+			nexts := make([]model.Hash, 0)
+			for k, _ := range node.edges {
+				nexts = append(nexts, k)
 			}
+			return nexts, nil
 		}
-
-		// Add child nodes to processing queue
-		// Processing order of nodes on the same level doesn't really matter for correctness of the DAG travel
-		// but it makes testing easier.
-		if currentNode.edges != nil {
-			sortedEdges := make([]*node, 0, len(currentNode.edges))
-			for _, nextNode := range currentNode.edges {
-				sortedEdges = append(sortedEdges, nextNode)
-			}
-			sort.Slice(sortedEdges, func(i, j int) bool {
-				return sortedEdges[i].document.Ref().Compare(sortedEdges[j].document.Ref()) < 0
-			})
-			for _, nextNode := range sortedEdges {
-				queue.PushBack(nextNode)
-			}
-		}
-
-		// Visit the node
-		visitor(currentNode.document)
-
-		// Mark this node as visited
-		visitedNodes[currentNode] = true
-		visitedDocuments[currentNode.document.Ref()] = true
-	}
-	return nil
+	}, len(c.nodes))
 }

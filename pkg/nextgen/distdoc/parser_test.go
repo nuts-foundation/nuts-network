@@ -31,6 +31,7 @@ func TestParseDocument(t *testing.T) {
 		assert.Equal(t, certificate.Raw, document.SigningCertificate().Raw)
 		assert.Equal(t, 1, int(document.Version()))
 		assert.Equal(t, "foo/bar", document.PayloadType())
+		assert.Equal(t, time.UTC, document.SigningTime().Location())
 		assert.Equal(t, headers.PrivateParams()[previousHeader].([]string)[0], document.Previous()[0].String())
 		assert.Equal(t, headers.PrivateParams()[timelineIDHeader].(string), document.TimelineID().String())
 		assert.Equal(t, headers.PrivateParams()[timelineVersionHeader].(int), document.TimelineVersion())

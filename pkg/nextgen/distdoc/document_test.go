@@ -89,7 +89,7 @@ func Test_document_Sign(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		doc, _ := NewDocument(payload, contentType, expectedPrevs)
 
-		signedDoc, err := doc.Sign(key, certificate, time.Date(2020, 10, 23, 13, 0, 0, 0, time.UTC))
+		signedDoc, err := doc.Sign(key, certificate, time.Date(2020, 10, 23, 13, 0, 0, 0, time.FixedZone("test", 1)))
 
 		if !assert.NoError(t, err) {
 			return
@@ -97,6 +97,7 @@ func Test_document_Sign(t *testing.T) {
 		t.Run("verify object properties", func(t *testing.T) {
 			assert.Equal(t, certificate.Raw, signedDoc.SigningCertificate().Raw)
 			assert.False(t, signedDoc.Ref().Empty())
+			assert.Equal(t, time.UTC, signedDoc.SigningTime().Location())
 		})
 		t.Run("verify JWS", func(t *testing.T) {
 			message, _ := jws.ParseString(string(signedDoc.Data()))
@@ -107,7 +108,7 @@ func Test_document_Sign(t *testing.T) {
 			assert.Equal(t, jwa.ES256, headers.Algorithm())
 			assert.Len(t, headers.X509CertChain(), 1)
 			// Custom headers
-			assert.Equal(t, int64(1603458000), int64(headers.PrivateParams()[signingTimeHeader].(float64)))
+			assert.Equal(t, int64(1603457999), int64(headers.PrivateParams()[signingTimeHeader].(float64)))
 			assert.Equal(t, 1, int(headers.PrivateParams()[versionHeader].(float64)))
 			prevs := headers.PrivateParams()[previousHeader]
 			assert.Len(t, prevs, 2, "expected 2 prevs")
