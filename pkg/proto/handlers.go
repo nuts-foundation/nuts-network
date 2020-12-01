@@ -49,7 +49,7 @@ func (p *protocol) handleDocumentContentsQuery(peer model.PeerID, query *network
 			}
 		}
 	} else {
-		log.Log().Warnf("Peer queried us for document contents, test.appear to have it (peer=%s,document=%s)", peer, hash)
+		log.Log().Warnf("Peer queried us for document contents but we don't have it (peer=%s,document=%s)", peer, hash)
 	}
 	return nil
 }

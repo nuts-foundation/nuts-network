@@ -156,7 +156,7 @@ func _3_add_documents_contents_hashUpSql() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "3_add_documents_contents_hash.up.sql", size: 48, mode: os.FileMode(420), modTime: time.Unix(1605262256, 0)}
+	info := bindataFileInfo{name: "3_add_documents_contents_hash.up.sql", size: 48, mode: os.FileMode(420), modTime: time.Unix(1605810460, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -176,7 +176,7 @@ func bindataGo() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "bindata.go", size: 12288, mode: os.FileMode(420), modTime: time.Unix(1605278152, 0)}
+	info := bindataFileInfo{name: "bindata.go", size: 12288, mode: os.FileMode(420), modTime: time.Unix(1606808339, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
