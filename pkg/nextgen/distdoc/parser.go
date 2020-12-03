@@ -99,7 +99,7 @@ func parseSigningTime(document *document, headers jws.Headers, _ *jws.Message) e
 	} else if timeAsFloat64, ok := timeAsInterf.(float64); !ok {
 		return documentValidationError(invalidHeaderErrFmt, signingTimeHeader)
 	} else {
-		document.signingTime = time.Unix(int64(timeAsFloat64), 0)
+		document.signingTime = time.Unix(int64(timeAsFloat64), 0).UTC()
 		return nil
 	}
 }

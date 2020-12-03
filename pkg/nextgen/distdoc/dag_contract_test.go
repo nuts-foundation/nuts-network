@@ -39,7 +39,8 @@ func DAGTest_Add(creator func(t *testing.T) DAG, t *testing.T) {
 
 		assert.NoError(t, err)
 		visitor := trackingVisitor{}
-		err = graph.Walk(visitor.Accept)
+		root, _ := graph.Root()
+		err = graph.Walk(&BFSWalker{}, visitor.Accept, root)
 		if !assert.NoError(t, err) {
 			return
 		}
@@ -58,7 +59,8 @@ func DAGTest_Add(creator func(t *testing.T) DAG, t *testing.T) {
 		}
 
 		visitor := trackingVisitor{}
-		err := graph.Walk(visitor.Accept)
+		root, _ := graph.Root()
+		err := graph.Walk(&BFSWalker{}, visitor.Accept, root)
 		if !assert.NoError(t, err) {
 			return
 		}
@@ -79,94 +81,17 @@ func DAGTest_Add(creator func(t *testing.T) DAG, t *testing.T) {
 }
 
 func DAGTest_Walk(creator func(t *testing.T) DAG, t *testing.T) {
-	t.Run("ok - walk graph F", func(t *testing.T) {
-		visitor := trackingVisitor{}
-		graph, _ := graphF(creator, t)
-
-		err := graph.Walk(visitor.Accept)
-		if !assert.NoError(t, err) {
-			return
-		}
-
-		assert.Regexp(t, "0, (1, 2|2, 1), (3, 4|4, 3), 5", visitor.JoinRefsAsString())
-	})
-
-	t.Run("ok - walk graph G", func(t *testing.T) {
-		//..................A
-		//................/  \
-		//...............B    C
-		//...............\   / \
-		//.................D    E
-		//.................\.....\
-		//..................\.....F
-		//...................\.../
-		//.....................G
-		visitor := trackingVisitor{}
-		graph, docs := graphF(creator, t)
-		G := testDocument(6, docs[3].Ref(), docs[5].Ref())
-		graph.Add(G)
-
-		graph.Walk(visitor.Accept)
-
-		assert.Regexp(t, "0, (1, 2|2, 1), (3, 4|4, 3), 5, 6", visitor.JoinRefsAsString())
-	})
-
-	t.Run("ok - walk graph F, C is missing", func(t *testing.T) {
-		//..................A
-		//................/  \
-		//...............B    C (missing)
-		//...............\   / \
-		//.................D    E
-		//.......................\
-		//........................F
-		visitor := trackingVisitor{}
-		_, docs := graphF(creator, t)
-		graph := creator(t)
-		graph.Add(docs[0], docs[1], docs[3], docs[4], docs[5])
-
-		graph.Walk(visitor.Accept)
-
-		assert.Equal(t, "0, 1", visitor.JoinRefsAsString())
-	})
-
 	t.Run("ok - empty graph", func(t *testing.T) {
 		graph := creator(t)
 		visitor := trackingVisitor{}
 
-		err := graph.Walk(visitor.Accept)
+		root, _ := graph.Root()
+		err := graph.Walk(&BFSWalker{}, visitor.Accept, root)
 		if !assert.NoError(t, err) {
 			return
 		}
 
 		assert.Empty(t, visitor.documents)
-	})
-
-	t.Run("ok - document added twice", func(t *testing.T) {
-		graph := creator(t)
-		d := testDocument(0)
-		graph.Add(d)
-		graph.Add(d)
-		visitor := trackingVisitor{}
-
-		graph.Walk(visitor.Accept)
-
-		assert.Len(t, visitor.documents, 1)
-	})
-
-	t.Run("error - second root document", func(t *testing.T) {
-		graph := creator(t)
-		d1 := testDocument(0)
-		d2 := testDocument(1)
-		err := graph.Add(d1)
-
-		err = graph.Add(d2)
-		assert.Equal(t, errRootAlreadyExists, err)
-		visitor := trackingVisitor{}
-
-		graph.Walk(visitor.Accept)
-
-		assert.Len(t, visitor.documents, 1)
-		assert.Equal(t, d1, visitor.documents[0])
 	})
 }
 
@@ -217,9 +142,12 @@ func graphF(creator func(t *testing.T) DAG, t *testing.T) (DAG, []Document) {
 var privateKey, certificate = generateKeyAndCertificate()
 
 func testDocument(num uint32, prevs ...model.Hash) Document {
-	ref := model.EmptyHash()
-	binary.BigEndian.PutUint32(ref[model.HashSize-4:], num)
-	unsignedDocument, _ := NewDocument(PayloadHash(ref), "foo/bar", prevs)
-	signedDocument, _ := unsignedDocument.Sign(privateKey, certificate, time.Now())
+	payloadHash := model.EmptyHash()
+	binary.BigEndian.PutUint32(payloadHash[model.HashSize-4:], num)
+	unsignedDocument, _ := NewDocument(PayloadHash(payloadHash), "foo/bar", prevs)
+	signedDocument, err := unsignedDocument.Sign(privateKey, certificate, time.Now())
+	if err != nil {
+		panic(err)
+	}
 	return signedDocument
 }

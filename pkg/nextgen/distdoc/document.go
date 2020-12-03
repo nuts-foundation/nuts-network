@@ -161,6 +161,7 @@ func (d *document) Sign(key crypto.Signer, certificate *x509.Certificate, moment
 	for i, prev := range d.prevs {
 		prevsAsString[i] = prev.String()
 	}
+	normalizedMoment := moment.UTC()
 	// TODO: Make algorithm a parameter
 	algo := jwa.ES256
 	headerMap := map[string]interface{}{
@@ -168,7 +169,7 @@ func (d *document) Sign(key crypto.Signer, certificate *x509.Certificate, moment
 		jws.ContentTypeKey:   d.payloadType,
 		jws.CriticalKey:      []string{signingTimeHeader, versionHeader, previousHeader},
 		jws.X509CertChainKey: cert.MarshalX509CertChain([]*x509.Certificate{certificate}),
-		signingTimeHeader:    moment.UTC().Unix(),
+		signingTimeHeader:    normalizedMoment.Unix(),
 		previousHeader:       prevsAsString,
 		versionHeader:        d.Version(),
 	}
@@ -192,6 +193,7 @@ func (d *document) Sign(key crypto.Signer, certificate *x509.Certificate, moment
 		} else {
 			d.setData(data)
 			d.certificate = certificate
+			d.signingTime = normalizedMoment
 			return d, nil
 		}
 	}
