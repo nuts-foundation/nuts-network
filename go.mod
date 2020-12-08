@@ -14,7 +14,7 @@ require (
 	github.com/labstack/echo/v4 v4.1.17
 	github.com/lestrrat-go/jwx v1.0.5
 	github.com/mattn/go-sqlite3 v2.0.3+incompatible
-	github.com/nuts-foundation/nuts-crypto v0.15.1-0.20201113103650-0107d387c2e2
+	github.com/nuts-foundation/nuts-crypto v0.15.1-0.20201208085925-5ed4fc4da094
 	github.com/nuts-foundation/nuts-go-core v0.15.0
 	github.com/nuts-foundation/nuts-go-test v0.15.0
 	github.com/pkg/errors v0.9.1
